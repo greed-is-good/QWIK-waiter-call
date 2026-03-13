@@ -1,3 +1,50 @@
-# QWIK Waiter Call
+# QWIK Admin (MVP)
 
-Qwik app for calling waiters from a table button.
+Локальный MVP-референс админки QWIK с моковыми данными, MAX/IIKO симуляторами и сохранением состояния в `localStorage`.
+
+## Что внутри
+
+- Login c mock-авторизацией `admin / admin`
+- Реестр вызовов с деталями и таймлайном статусов
+- Столы и закрепления waiter/hookah
+- Режимы системы: `Конфигурация` / `Работа`
+- Новые кнопки и ButtonBinding whitelist
+- CRUD для сотрудников, услуг и столов
+- Журналы `unknown_button`, `invalid_signal`, ошибок
+- IIKO mock integration screen
+- DataLens-style аналитика с графиками
+- Встроенный симулятор сигналов, MAX-чата и `check_closed`
+
+## Запуск
+
+```bash
+npm i
+npm run dev
+```
+
+После запуска откроется Vite dev server, обычно:
+
+```text
+http://localhost:5173
+```
+
+## Как посмотреть MVP
+
+1. Войти под `admin / admin`
+2. Открыть экран `Симулятор событий`
+3. Сгенерировать waiter или hookah вызов
+4. На панели MAX-чата выбрать сотрудника и нажать `Откликнуться`
+5. Для waiter-сценария открыть `IIKO` или правую панель в симуляторе и нажать `Закрыть чек по столу`
+
+## Где симулятор
+
+- В боковом меню: `Симулятор событий`
+- Прямой маршрут после запуска: `/simulator`
+
+## Сборка
+
+```bash
+npm run build
+```
+
+Проект проверен локальной production-сборкой.

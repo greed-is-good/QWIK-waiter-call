@@ -1,0 +1,678 @@
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+
+import { createInitialState } from '../lib/mockData'
+import type {
+  AuthUser,
+  BindingDraft,
+  ButtonBinding,
+  CallEvent,
+  EmployeeDraft,
+  ErrorLog,
+  Notification,
+  NotificationTone,
+  ServiceDraft,
+  SimulateSignalInput,
+  TableAssignment,
+  TableDraft,
+} from '../types'
+
+const storageKey = 'qwik-admin-mvp-store'
+const initialState = createInitialState()
+
+const createId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+const normalizeRadioButtonId = (value: string) => value.trim().toUpperCase()
+
+const getAssignmentScope = (serviceId: string | null) => (serviceId === 'svc-hookah' ? 'hookah' : 'waiter')
+
+interface AppState extends ReturnType<typeof createInitialState> {
+  authUser: AuthUser | null
+  notifications: Notification[]
+  login: (username: string, password: string) => boolean
+  logout: () => void
+  dismissNotification: (id: string) => void
+  setSelectedChatEmployeeId: (employeeId: string) => void
+  switchMode: (mode: AppState['systemMode']) => void
+  saveEmployee: (draft: EmployeeDraft) => void
+  saveService: (draft: ServiceDraft) => void
+  saveTable: (draft: TableDraft) => void
+  saveBinding: (draft: BindingDraft) => void
+  setBindingActive: (radioButtonId: string, isActive: boolean) => void
+  createBindingFromNewButton: (radioButtonId: string, tableId: string, serviceId: string) => void
+  manualResetAssignment: (assignmentId: string) => void
+  simulateCheckClose: (tableId: string) => void
+  simulateSignal: (payload: SimulateSignalInput) => void
+  respondToChatMessage: (messageId: string, employeeId: string) => void
+}
+
+type PersistedState = Pick<
+  AppState,
+  | 'authUser'
+  | 'systemMode'
+  | 'services'
+  | 'tables'
+  | 'employees'
+  | 'bindings'
+  | 'callEvents'
+  | 'assignments'
+  | 'chatMessages'
+  | 'newButtons'
+  | 'techLogs'
+  | 'errorLogs'
+  | 'iiko'
+  | 'settings'
+  | 'selectedChatEmployeeId'
+>
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => {
+      const pushNotification = (
+        tone: NotificationTone,
+        message: string,
+        description?: string,
+      ) => {
+        const id = createId('toast')
+
+        set((state) => ({
+          notifications: [{ id, tone, message, description }, ...state.notifications].slice(0, 5),
+        }))
+
+        window.setTimeout(() => {
+          get().dismissNotification(id)
+        }, 4500)
+      }
+
+      const appendTechLog = (
+        scope: AppState['techLogs'][number]['scope'],
+        level: AppState['techLogs'][number]['level'],
+        message: string,
+      ) => ({
+        id: createId('tech'),
+        scope,
+        level,
+        message,
+        created_at: new Date().toISOString(),
+      })
+
+      const appendErrorLog = (
+        component: ErrorLog['component'],
+        level: ErrorLog['level'],
+        message: string,
+        relatedEventId?: string,
+      ): ErrorLog => ({
+        id: createId('err'),
+        component,
+        level,
+        message,
+        created_at: new Date().toISOString(),
+        related_event_id: relatedEventId,
+      })
+
+      const createEvent = (
+        overrides: Partial<CallEvent> & Pick<CallEvent, 'radio_button_id' | 'client_device_id' | 'raw_signal' | 'status'>,
+      ): CallEvent => {
+        const timestamp = new Date().toISOString()
+
+        return {
+          event_id: createId('call'),
+          table_id: null,
+          service_id: null,
+          received_at: timestamp,
+          routed_at: null,
+          notified_at: null,
+          confirmed_at: null,
+          responded_by_employee_id: null,
+          ...overrides,
+        }
+      }
+
+      return {
+        ...initialState,
+        authUser: null,
+        notifications: [],
+        login: (username, password) => {
+          const isValid = username === 'admin' && password === 'admin'
+
+          if (!isValid) {
+            pushNotification('error', 'Неверный логин или пароль', 'Используй admin / admin')
+            return false
+          }
+
+          set({
+            authUser: { username: 'admin', display_name: 'Администратор QWIK' },
+          })
+          pushNotification('success', 'Вход выполнен', 'Добро пожаловать в QWIK Admin')
+          return true
+        },
+        logout: () => {
+          set({ authUser: null })
+          pushNotification('info', 'Сессия завершена')
+        },
+        dismissNotification: (id) =>
+          set((state) => ({
+            notifications: state.notifications.filter((notification) => notification.id !== id),
+          })),
+        setSelectedChatEmployeeId: (employeeId) => set({ selectedChatEmployeeId: employeeId }),
+        switchMode: (mode) => {
+          set((state) => ({
+            systemMode: mode,
+            techLogs: [
+              appendTechLog('system', 'info', `Режим системы переключен на ${mode === 'work' ? 'Работа' : 'Конфигурация'}`),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Режим обновлен', mode === 'work' ? 'Whitelist-обработка активна' : 'Система принимает новые кнопки')
+        },
+        saveEmployee: (draft) => {
+          set((state) => {
+            const employeeId = draft.id ?? createId('emp')
+            const employee = {
+              id: employeeId,
+              full_name: draft.full_name.trim(),
+              role: draft.role,
+              max_user_id: draft.max_user_id.trim(),
+              is_active: draft.is_active,
+            }
+
+            const employees = draft.id
+              ? state.employees.map((item) => (item.id === draft.id ? employee : item))
+              : [employee, ...state.employees]
+
+            return {
+              employees,
+              techLogs: [
+                appendTechLog('system', 'success', `${draft.id ? 'Обновлен' : 'Создан'} сотрудник ${employee.full_name}`),
+                ...state.techLogs,
+              ],
+            }
+          })
+          pushNotification('success', 'Сотрудник сохранен')
+        },
+        saveService: (draft) => {
+          set((state) => {
+            const serviceId = draft.id ?? createId('svc')
+            const service = {
+              id: serviceId,
+              name: draft.name.trim(),
+              is_active: draft.is_active,
+            }
+
+            const services = draft.id
+              ? state.services.map((item) => (item.id === draft.id ? service : item))
+              : [service, ...state.services]
+
+            return {
+              services,
+              techLogs: [
+                appendTechLog('system', 'success', `${draft.id ? 'Обновлена' : 'Создана'} услуга ${service.name}`),
+                ...state.techLogs,
+              ],
+            }
+          })
+          pushNotification('success', 'Услуга сохранена')
+        },
+        saveTable: (draft) => {
+          set((state) => {
+            const tableId = draft.id ?? createId('table')
+            const table = {
+              id: tableId,
+              name: draft.name.trim(),
+              zone: draft.zone,
+              is_active: draft.is_active,
+            }
+
+            const tables = draft.id
+              ? state.tables.map((item) => (item.id === draft.id ? table : item))
+              : [table, ...state.tables]
+
+            return {
+              tables,
+              techLogs: [
+                appendTechLog('system', 'success', `${draft.id ? 'Обновлен' : 'Создан'} ${table.name}`),
+                ...state.techLogs,
+              ],
+            }
+          })
+          pushNotification('success', 'Стол сохранен')
+        },
+        saveBinding: (draft) => {
+          const radioId = normalizeRadioButtonId(draft.radio_button_id ?? '')
+          if (!radioId) {
+            pushNotification('error', 'Укажи radio_button_id')
+            return
+          }
+
+          set((state) => {
+            const currentId = draft.original_radio_button_id ?? radioId
+            const exists = state.bindings.some(
+              (binding) => binding.radio_button_id === radioId && binding.radio_button_id !== currentId,
+            )
+
+            if (exists) {
+              pushNotification('warning', 'Такой radio_button_id уже существует')
+              return state
+            }
+
+            const binding: ButtonBinding = {
+              radio_button_id: radioId,
+              table_id: draft.table_id,
+              service_id: draft.service_id,
+              is_active: draft.is_active,
+              created_at:
+                state.bindings.find((item) => item.radio_button_id === currentId)?.created_at ??
+                new Date().toISOString(),
+            }
+
+            const hasCurrent = state.bindings.some((item) => item.radio_button_id === currentId)
+            const bindings = hasCurrent
+              ? state.bindings.map((item) => (item.radio_button_id === currentId ? binding : item))
+              : [binding, ...state.bindings]
+
+            return {
+              bindings,
+              techLogs: [
+                appendTechLog('system', 'success', `${hasCurrent ? 'Обновлена' : 'Создана'} привязка ${radioId}`),
+                ...state.techLogs,
+              ],
+            }
+          })
+          pushNotification('success', 'Привязка сохранена')
+        },
+        setBindingActive: (radioButtonId, isActive) => {
+          set((state) => ({
+            bindings: state.bindings.map((binding) =>
+              binding.radio_button_id === radioButtonId ? { ...binding, is_active: isActive } : binding,
+            ),
+            techLogs: [
+              appendTechLog(
+                'system',
+                isActive ? 'success' : 'warning',
+                `Привязка ${radioButtonId} ${isActive ? 'активирована' : 'деактивирована'}`,
+              ),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification(isActive ? 'success' : 'warning', isActive ? 'Привязка активна' : 'Привязка выключена')
+        },
+        createBindingFromNewButton: (radioButtonId, tableId, serviceId) => {
+          set((state) => ({
+            bindings: [
+              {
+                radio_button_id: radioButtonId,
+                table_id: tableId,
+                service_id: serviceId,
+                is_active: true,
+                created_at: new Date().toISOString(),
+              },
+              ...state.bindings,
+            ],
+            newButtons: state.newButtons.filter((button) => button.radio_button_id !== radioButtonId),
+            techLogs: [
+              appendTechLog('system', 'success', `Для ${radioButtonId} создана новая привязка`),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Новая привязка создана')
+        },
+        manualResetAssignment: (assignmentId) => {
+          const assignment = get().assignments.find((item) => item.id === assignmentId)
+          if (!assignment) {
+            return
+          }
+
+          set((state) => ({
+            assignments: state.assignments.map((item) =>
+              item.id === assignmentId
+                ? {
+                    ...item,
+                    status: 'released',
+                    released_at: new Date().toISOString(),
+                    release_reason: 'manual_reset',
+                  }
+                : item,
+            ),
+            techLogs: [
+              appendTechLog('system', 'warning', `Закрепление ${assignmentId} снято вручную`),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification('warning', 'Закрепление снято вручную')
+        },
+        simulateCheckClose: (tableId) => {
+          const state = get()
+          const assignment = state.assignments.find(
+            (item) => item.table_id === tableId && item.assignment_scope === 'waiter' && item.status === 'active',
+          )
+
+          if (!assignment) {
+            set((current) => ({
+              iiko: {
+                ...current.iiko,
+                last_sync_at: new Date().toISOString(),
+                event_logs: [
+                  {
+                    id: createId('iiko'),
+                    type: 'warning',
+                    message: `check_closed проигнорирован: по ${tableId} нет активного waiter-закрепления`,
+                    created_at: new Date().toISOString(),
+                    table_id: tableId,
+                  },
+                  ...current.iiko.event_logs,
+                ],
+              },
+            }))
+            pushNotification('warning', 'Для выбранного стола нет активного чека')
+            return
+          }
+
+          set((current) => ({
+            assignments: current.assignments.map((item) =>
+              item.id === assignment.id
+                ? {
+                    ...item,
+                    status: 'released',
+                    released_at: new Date().toISOString(),
+                    release_reason: 'check_closed',
+                  }
+                : item,
+            ),
+            iiko: {
+              ...current.iiko,
+              last_sync_at: new Date().toISOString(),
+              event_logs: [
+                {
+                  id: createId('iiko'),
+                  type: 'check_closed',
+                  message: `IIKO закрыл чек ${assignment.iiko_check_id ?? 'без id'}, waiter-закрепление снято`,
+                  created_at: new Date().toISOString(),
+                  table_id: tableId,
+                  assignment_id: assignment.id,
+                },
+                ...current.iiko.event_logs,
+              ],
+            },
+            techLogs: [
+              appendTechLog('iiko', 'success', `Симуляция check_closed выполнена для ${tableId}`),
+              ...current.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Закрепление официанта снято по IIKO')
+        },
+        simulateSignal: (payload) => {
+          const radioButtonId = normalizeRadioButtonId(payload.radio_button_id)
+          const now = new Date().toISOString()
+          const state = get()
+
+          if (!radioButtonId || !/^[A-Z0-9-]{4,}$/.test(radioButtonId)) {
+            const invalidEvent = createEvent({
+              radio_button_id: radioButtonId,
+              client_device_id: payload.client_device_id,
+              raw_signal: JSON.stringify(payload),
+              status: 'invalid_signal',
+              note: 'Radio id не прошел базовую валидацию',
+            })
+
+            set((current) => ({
+              callEvents: [invalidEvent, ...current.callEvents],
+              errorLogs: [
+                appendErrorLog('bot', 'warning', 'Симулятор получил invalid_signal', invalidEvent.event_id),
+                ...current.errorLogs,
+              ],
+              techLogs: [
+                appendTechLog('simulator', 'warning', `invalid_signal: ${payload.client_device_id}`),
+                ...current.techLogs,
+              ],
+            }))
+            pushNotification('error', 'Невалидный сигнал', 'Проверь radio_button_id')
+            return
+          }
+
+          const lastEvent = [...state.callEvents]
+            .sort((left, right) => new Date(right.received_at).getTime() - new Date(left.received_at).getTime())
+            .find((event) => event.radio_button_id === radioButtonId)
+
+          if (lastEvent && new Date(now).getTime() - new Date(lastEvent.received_at).getTime() < 2_000) {
+            set((current) => ({
+              techLogs: [
+                appendTechLog('bot', 'warning', `suppressed duplicate: ${radioButtonId}`),
+                ...current.techLogs,
+              ],
+            }))
+            pushNotification('warning', 'Дубликат подавлен', 'Повтор пришел быстрее, чем за 2 секунды')
+            return
+          }
+
+          const binding = state.bindings.find((item) => item.radio_button_id === radioButtonId && item.is_active)
+
+          if (!binding) {
+            if (state.systemMode === 'configuration') {
+              set((current) => {
+                const existing = current.newButtons.find((button) => button.radio_button_id === radioButtonId)
+
+                return {
+                  newButtons: existing
+                    ? current.newButtons.map((button) =>
+                        button.radio_button_id === radioButtonId
+                          ? {
+                              ...button,
+                              samples_count: button.samples_count + 1,
+                              last_seen_at: now,
+                              last_client_device_id: payload.client_device_id,
+                              raw_signal: JSON.stringify(payload),
+                            }
+                          : button,
+                      )
+                    : [
+                        {
+                          radio_button_id: radioButtonId,
+                          first_seen_at: now,
+                          last_seen_at: now,
+                          samples_count: 1,
+                          last_client_device_id: payload.client_device_id,
+                          raw_signal: JSON.stringify(payload),
+                        },
+                        ...current.newButtons,
+                      ],
+                  techLogs: [
+                    appendTechLog('bot', 'info', `Поймана новая кнопка ${radioButtonId} в режиме конфигурации`),
+                    ...current.techLogs,
+                  ],
+                }
+              })
+              pushNotification('success', 'Новая кнопка зафиксирована', 'Открой раздел "Новые кнопки" для создания привязки')
+              return
+            }
+
+            const unknownEvent = createEvent({
+              radio_button_id: radioButtonId,
+              client_device_id: payload.client_device_id,
+              raw_signal: JSON.stringify(payload),
+              status: 'unknown_button',
+              note: 'Кнопка не входит в whitelist',
+            })
+
+            set((current) => ({
+              callEvents: [unknownEvent, ...current.callEvents],
+              errorLogs: [
+                appendErrorLog('bot', 'warning', `Unknown button ${radioButtonId} в рабочем режиме`, unknownEvent.event_id),
+                ...current.errorLogs,
+              ],
+              techLogs: [
+                appendTechLog('bot', 'warning', `unknown_button: ${radioButtonId}`),
+                ...current.techLogs,
+              ],
+            }))
+            pushNotification('warning', 'Неизвестная кнопка отправлена в журнал')
+            return
+          }
+
+          const event = createEvent({
+            radio_button_id: radioButtonId,
+            client_device_id: payload.client_device_id,
+            raw_signal: JSON.stringify(payload),
+            status: 'notified',
+            table_id: binding.table_id,
+            service_id: binding.service_id,
+            routed_at: now,
+            notified_at: now,
+            note: payload.selected_table_id || payload.selected_service_id ? 'Сигнал создан через симулятор' : undefined,
+          })
+
+          const table = state.tables.find((item) => item.id === binding.table_id)
+          const service = state.services.find((item) => item.id === binding.service_id)
+          const messageText = `${table?.name ?? 'Стол'} вызывает ${service?.name.toLowerCase() ?? 'сервис'}`
+
+          set((current) => ({
+            callEvents: [event, ...current.callEvents],
+            chatMessages: [
+              {
+                id: createId('msg'),
+                event_id: event.event_id,
+                table_id: binding.table_id,
+                service_id: binding.service_id,
+                state: 'open',
+                created_at: now,
+                text: messageText,
+              },
+              ...current.chatMessages,
+            ],
+            techLogs: [
+              appendTechLog('bot', 'success', `Вызов ${event.event_id} отправлен в MAX-чат`),
+              ...current.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Вызов создан', messageText)
+        },
+        respondToChatMessage: (messageId, employeeId) => {
+          const state = get()
+          const message = state.chatMessages.find((item) => item.id === messageId)
+          const employee = state.employees.find((item) => item.id === employeeId)
+
+          if (!message || !employee) {
+            return
+          }
+
+          const event = state.callEvents.find((item) => item.event_id === message.event_id)
+          if (!event) {
+            return
+          }
+
+          const scope = getAssignmentScope(message.service_id)
+          const activeAssignment = state.assignments.find(
+            (item) =>
+              item.table_id === message.table_id &&
+              item.assignment_scope === scope &&
+              item.status === 'active',
+          )
+          const assignedEmployee = state.employees.find((item) => item.id === activeAssignment?.assigned_employee_id)
+
+          if (message.state !== 'open') {
+            pushNotification(
+              'warning',
+              assignedEmployee ? `Стол уже закреплен за ${assignedEmployee.full_name}` : 'Вызов уже обработан',
+            )
+            return
+          }
+
+          if (!employee.is_active) {
+            pushNotification('warning', 'Сотрудник неактивен')
+            return
+          }
+
+          if (scope === 'hookah' && employee.role !== 'hookah') {
+            pushNotification('warning', 'Вызов доступен только кальянщику')
+            return
+          }
+
+          if (scope === 'waiter' && employee.role !== 'waiter') {
+            pushNotification('warning', 'Данный столик обслуживается другим официантом')
+            return
+          }
+
+          if (activeAssignment && activeAssignment.assigned_employee_id !== employeeId) {
+            pushNotification(
+              'warning',
+              scope === 'waiter'
+                ? 'Данный столик обслуживается другим официантом'
+                : `Стол уже закреплен за ${assignedEmployee?.full_name ?? 'другим сотрудником'}`,
+            )
+            return
+          }
+
+          const now = new Date().toISOString()
+          const needsAssignment = !activeAssignment
+          const assignmentId = activeAssignment?.id ?? createId('assign')
+
+          set((current) => ({
+            callEvents: current.callEvents.map((item) =>
+              item.event_id === event.event_id
+                ? {
+                    ...item,
+                    status: 'confirmed',
+                    confirmed_at: now,
+                    responded_by_employee_id: employeeId,
+                  }
+                : item,
+            ),
+            chatMessages: current.chatMessages.map((item) =>
+              item.id === messageId
+                ? {
+                    ...item,
+                    state: 'closed',
+                    responded_by_employee_id: employeeId,
+                  }
+                : item,
+            ),
+            assignments: needsAssignment
+              ? [
+                  {
+                    id: assignmentId,
+                    table_id: message.table_id,
+                    assigned_employee_id: employeeId,
+                    assignment_scope: scope,
+                    status: 'active',
+                    assigned_at: now,
+                    iiko_check_id: scope === 'waiter' ? `CHK-${Math.floor(Math.random() * 9000 + 1000)}` : null,
+                  } satisfies TableAssignment,
+                  ...current.assignments,
+                ]
+              : current.assignments,
+            techLogs: [
+              appendTechLog('bot', 'success', `${employee.full_name} обработал вызов ${event.event_id}`),
+              ...current.techLogs,
+            ],
+          }))
+
+          pushNotification(
+            'success',
+            needsAssignment ? `Стол закреплен за ${employee.full_name}` : `${employee.full_name} подтвердил вызов`,
+          )
+        },
+      }
+    },
+    {
+      name: storageKey,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state): PersistedState => ({
+        authUser: state.authUser,
+        systemMode: state.systemMode,
+        services: state.services,
+        tables: state.tables,
+        employees: state.employees,
+        bindings: state.bindings,
+        callEvents: state.callEvents,
+        assignments: state.assignments,
+        chatMessages: state.chatMessages,
+        newButtons: state.newButtons,
+        techLogs: state.techLogs,
+        errorLogs: state.errorLogs,
+        iiko: state.iiko,
+        settings: state.settings,
+        selectedChatEmployeeId: state.selectedChatEmployeeId,
+      }),
+    },
+  ),
+)
