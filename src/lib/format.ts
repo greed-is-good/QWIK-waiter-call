@@ -2,10 +2,16 @@ import clsx from 'clsx'
 
 import type {
   AssignmentScope,
+  AssignmentStatus,
   CallEvent,
   CallStatus,
+  ClientDevice,
   Employee,
   ErrorLog,
+  HealthCheck,
+  IikoEventLog,
+  IikoState,
+  ReleaseReason,
   Service,
   TableAssignment,
   TableItem,
@@ -76,6 +82,167 @@ export const getStatusTone = (status: CallStatus | ErrorLog['level'] | 'info' | 
   }
 }
 
+export const getCallStatusLabel = (status: CallStatus) => {
+  switch (status) {
+    case 'received':
+      return 'Получен'
+    case 'routed':
+      return 'Маршрутизирован'
+    case 'notified':
+      return 'Отправлен в чат'
+    case 'confirmed':
+      return 'Подтвержден'
+    case 'unknown_button':
+      return 'Неизвестная кнопка'
+    case 'invalid_signal':
+      return 'Невалидный сигнал'
+    case 'error':
+      return 'Ошибка'
+  }
+}
+
+export const isTechnicalCallStatus = (status: CallStatus) =>
+  status === 'unknown_button' || status === 'invalid_signal'
+
+export const isPendingWorkingCallStatus = (status: CallStatus) =>
+  status === 'received' || status === 'routed' || status === 'notified'
+
+export const isRegistryCallStatus = (status: CallStatus) => !isTechnicalCallStatus(status)
+
+export type DerivedTableStatus = 'free' | 'waiting' | 'confirmed'
+
+export const getDerivedTableStatus = (
+  tableId: string,
+  callEvents: CallEvent[],
+): DerivedTableStatus => {
+  const tableEvents = callEvents
+    .filter((event) => event.table_id === tableId && isRegistryCallStatus(event.status))
+    .sort((left, right) => new Date(right.received_at).getTime() - new Date(left.received_at).getTime())
+
+  if (tableEvents.some((event) => isPendingWorkingCallStatus(event.status))) {
+    return 'waiting'
+  }
+
+  if (tableEvents[0]?.status === 'confirmed') {
+    return 'confirmed'
+  }
+
+  return 'free'
+}
+
+export const getDerivedTableStatusLabel = (status: DerivedTableStatus) => {
+  switch (status) {
+    case 'waiting':
+      return 'В ожидании'
+    case 'confirmed':
+      return 'Подтверждено'
+    default:
+      return 'Свободен'
+  }
+}
+
+export const getDerivedTableStatusTone = (status: DerivedTableStatus) => {
+  switch (status) {
+    case 'waiting':
+      return 'warning'
+    case 'confirmed':
+      return 'success'
+    default:
+      return 'neutral'
+  }
+}
+
+export const getAssignmentStatusLabel = (status: AssignmentStatus) =>
+  status === 'active' ? 'Активно' : 'Снято'
+
+export const getReleaseReasonLabel = (reason: ReleaseReason) => {
+  switch (reason) {
+    case 'check_closed':
+      return 'Чек закрыт'
+    case 'manual_reset':
+      return 'Ручной сброс'
+    case 'timeout':
+      return 'Таймаут'
+    case 'iiko_error':
+      return 'Ошибка IIKO'
+  }
+}
+
+export const getLogLevelLabel = (level: ErrorLog['level'] | 'info' | 'success') => {
+  switch (level) {
+    case 'info':
+      return 'Инфо'
+    case 'success':
+      return 'Успех'
+    case 'warning':
+      return 'Предупреждение'
+    case 'error':
+      return 'Ошибка'
+  }
+}
+
+export const getErrorComponentLabel = (component: ErrorLog['component']) => {
+  switch (component) {
+    case 'client':
+      return 'Клиент'
+    case 'backend':
+      return 'Бэкенд'
+    case 'bot':
+      return 'Бот'
+    case 'iiko':
+      return 'IIKO'
+  }
+}
+
+export const getIikoStatusLabel = (status: IikoState['status']) => {
+  switch (status) {
+    case 'connected':
+      return 'Подключено'
+    case 'degraded':
+      return 'Нестабильно'
+    case 'disconnected':
+      return 'Отключено'
+  }
+}
+
+export const getIikoEventTypeLabel = (type: IikoEventLog['type']) => {
+  switch (type) {
+    case 'sync':
+      return 'Синхронизация'
+    case 'check_closed':
+      return 'Чек закрыт'
+    case 'warning':
+      return 'Предупреждение'
+    case 'error':
+      return 'Ошибка'
+  }
+}
+
+export const getDeviceStatusLabel = (status: ClientDevice['status']) => {
+  switch (status) {
+    case 'online':
+      return 'Онлайн'
+    case 'offline':
+      return 'Офлайн'
+    case 'warning':
+      return 'Предупреждение'
+  }
+}
+
+export const getHealthStatusLabel = (status: HealthCheck['status']) => {
+  switch (status) {
+    case 'healthy':
+      return 'Норма'
+    case 'warning':
+      return 'Предупреждение'
+    case 'critical':
+      return 'Критично'
+  }
+}
+
+export const getChatMessageStateLabel = (state: 'open' | 'closed') =>
+  state === 'open' ? 'Ожидает отклика' : 'Закрыто'
+
 export const getScopeLabel = (scope: AssignmentScope) => (scope === 'waiter' ? 'Официант' : 'Кальян')
 
 export const getRoleLabel = (role: Employee['role']) => {
@@ -102,14 +269,14 @@ export const getAssignmentSummary = (
 
 export const buildTimeline = (event: CallEvent) => {
   const items = [
-    { key: 'received', label: 'received', value: event.received_at },
-    { key: 'routed', label: 'routed', value: event.routed_at ?? null },
-    { key: 'notified', label: 'notified', value: event.notified_at ?? null },
-    { key: 'confirmed', label: 'confirmed', value: event.confirmed_at ?? null },
+    { key: 'received', label: getCallStatusLabel('received'), value: event.received_at },
+    { key: 'routed', label: getCallStatusLabel('routed'), value: event.routed_at ?? null },
+    { key: 'notified', label: getCallStatusLabel('notified'), value: event.notified_at ?? null },
+    { key: 'confirmed', label: getCallStatusLabel('confirmed'), value: event.confirmed_at ?? null },
   ]
 
   if (event.status === 'unknown_button' || event.status === 'invalid_signal' || event.status === 'error') {
-    items.push({ key: event.status, label: event.status, value: event.received_at })
+    items.push({ key: event.status, label: getCallStatusLabel(event.status), value: event.received_at })
   }
 
   return items

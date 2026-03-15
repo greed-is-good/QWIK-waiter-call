@@ -30,11 +30,13 @@ export const NewButtonsPage = () => {
   const tables = useAppStore((state) => state.tables)
   const services = useAppStore((state) => state.services)
   const createBindingFromNewButton = useAppStore((state) => state.createBindingFromNewButton)
+  const activeTables = tables.filter((table) => table.is_active)
+  const activeServices = services.filter((service) => service.is_active)
 
   const [search, setSearch] = useState('')
   const [selectedRadioId, setSelectedRadioId] = useState<string | null>(null)
-  const [tableId, setTableId] = useState(tables[0]?.id ?? '')
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? '')
+  const [tableId, setTableId] = useState(activeTables[0]?.id ?? '')
+  const [serviceId, setServiceId] = useState(activeServices[0]?.id ?? '')
 
   const filtered = useMemo(
     () =>
@@ -49,8 +51,9 @@ export const NewButtonsPage = () => {
       return
     }
 
-    createBindingFromNewButton(selectedRadioId, tableId, serviceId)
-    setSelectedRadioId(null)
+    if (createBindingFromNewButton(selectedRadioId, tableId, serviceId)) {
+      setSelectedRadioId(null)
+    }
   }
 
   return (
@@ -99,10 +102,14 @@ export const NewButtonsPage = () => {
           </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Для новой привязки доступны только активные столы и активные услуги.
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           <Field label="Стол">
             <Select value={tableId} onChange={(event) => setTableId(event.target.value)}>
-              {tables.map((table) => (
+              {activeTables.map((table) => (
                 <option key={table.id} value={table.id}>
                   {table.name}
                 </option>
@@ -111,13 +118,14 @@ export const NewButtonsPage = () => {
           </Field>
           <Field label="Услуга">
             <Select value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
-              {services.map((service) => (
+              {activeServices.map((service) => (
                 <option key={service.id} value={service.id}>
                   {service.name}
                 </option>
               ))}
             </Select>
           </Field>
+          </div>
         </div>
       </Modal>
     </div>
@@ -137,6 +145,8 @@ export const BindingsPage = () => {
   const [draft, setDraft] = useState<BindingDraft>(defaultBindingDraft)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const selectableTables = tables.filter((table) => table.is_active || table.id === draft.table_id)
+  const selectableServices = services.filter((service) => service.is_active || service.id === draft.service_id)
 
   const filtered = useMemo(
     () =>
@@ -184,8 +194,9 @@ export const BindingsPage = () => {
   }
 
   const handleSave = () => {
-    saveBinding(draft)
-    setIsModalOpen(false)
+    if (saveBinding(draft)) {
+      setIsModalOpen(false)
+    }
   }
 
   return (
@@ -267,7 +278,11 @@ export const BindingsPage = () => {
           </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Активную привязку можно сохранить только для активного стола и активной услуги.
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           <Field label="radio_button_id">
             <Input
               value={draft.radio_button_id}
@@ -283,22 +298,23 @@ export const BindingsPage = () => {
           </Field>
           <Field label="Стол">
             <Select value={draft.table_id} onChange={(event) => setDraft((current) => ({ ...current, table_id: event.target.value }))}>
-              {tables.map((table) => (
+              {selectableTables.map((table) => (
                 <option key={table.id} value={table.id}>
-                  {table.name}
+                  {table.name}{table.is_active ? '' : ' (неактивен)'}
                 </option>
               ))}
             </Select>
           </Field>
           <Field label="Услуга">
             <Select value={draft.service_id} onChange={(event) => setDraft((current) => ({ ...current, service_id: event.target.value }))}>
-              {services.map((service) => (
+              {selectableServices.map((service) => (
                 <option key={service.id} value={service.id}>
-                  {service.name}
+                  {service.name}{service.is_active ? '' : ' (неактивна)'}
                 </option>
               ))}
             </Select>
           </Field>
+          </div>
         </div>
       </Modal>
       <ConfirmDialog

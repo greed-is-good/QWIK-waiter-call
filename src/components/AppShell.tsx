@@ -5,14 +5,12 @@ import {
   Cable,
   ChartNoAxesCombined,
   Cog,
-  DoorOpen,
   LayoutList,
   ListFilter,
   Radio,
   ScanSearch,
   Settings2,
   TableProperties,
-  UserRoundCog,
   Users,
   Wrench,
 } from 'lucide-react'
@@ -30,14 +28,13 @@ const navItems = [
   { to: '/employees', label: 'Сотрудники', icon: Users },
   { to: '/services', label: 'Услуги', icon: BellRing },
   { to: '/tables', label: 'Столы', icon: BookUser },
-  { to: '/logs/unknown', label: 'Журнал unknown_button', icon: ListFilter },
-  { to: '/logs/invalid', label: 'Журнал invalid_signal', icon: Activity },
+  { to: '/logs/unknown', label: 'Журнал неизвестных кнопок', icon: ListFilter },
+  { to: '/logs/invalid', label: 'Журнал невалидных сигналов', icon: Activity },
   { to: '/logs/errors', label: 'Журнал ошибок', icon: Wrench },
   { to: '/integrations', label: 'Интеграции IIKO', icon: Cable },
   { to: '/analytics', label: 'Аналитика', icon: ChartNoAxesCombined },
   { to: '/system-mode', label: 'Режимы системы', icon: Settings2 },
   { to: '/settings', label: 'Настройки', icon: Cog },
-  { to: '/simulator', label: 'Симулятор событий', icon: DoorOpen },
 ]
 
 export const AppShell = () => {
@@ -83,8 +80,9 @@ export const AppShell = () => {
                   className={({ isActive }) =>
                     cn(
                       'group flex min-w-max items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition',
-                      'border-transparent bg-white/80 text-slate-600 shadow-[0_10px_20px_rgba(15,23,42,0.04)] hover:border-emerald-200 hover:text-emerald-950',
-                      isActive && 'border-emerald-900 bg-emerald-950 text-white shadow-lg shadow-emerald-950/15',
+                      isActive
+                        ? 'border-emerald-900 bg-emerald-950 text-white shadow-lg shadow-emerald-950/15'
+                        : 'border-transparent bg-white/80 text-slate-600 shadow-[0_10px_20px_rgba(15,23,42,0.04)] hover:border-emerald-200 hover:text-emerald-950',
                     )
                   }
                 >

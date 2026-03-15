@@ -10,7 +10,7 @@ import {
   PageHeader,
   Select,
 } from '../components/ui'
-import { formatDateTime, getStatusTone } from '../lib/format'
+import { formatDateTime, getErrorComponentLabel, getLogLevelLabel, getStatusTone } from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
 
 const LogLayout = ({
@@ -58,10 +58,10 @@ export const UnknownLogPage = () => {
 
   return (
     <LogLayout
-      title="Журнал unknown_button"
-      description="Неизвестные кнопки попадают сюда в рабочем режиме."
+      title="Журнал неизвестных кнопок"
+      description="События типа unknown_button попадают сюда в рабочем режиме."
       hasData={filtered.length > 0}
-      headers={['Событие', 'radio_button_id', 'Устройство', 'Время', 'raw_signal']}
+      headers={['Событие', 'radio_button_id', 'Устройство', 'Режим', 'Время', 'raw_signal']}
       emptyTitle="Записей нет"
       emptyDescription="В рабочем режиме журнал пока пуст."
       filters={
@@ -78,6 +78,7 @@ export const UnknownLogPage = () => {
           <td className="px-4 py-3 font-semibold text-slate-900">{event.event_id}</td>
           <td className="px-4 py-3 text-slate-600">{event.radio_button_id || '—'}</td>
           <td className="px-4 py-3 text-slate-600">{event.client_device_id}</td>
+          <td className="px-4 py-3 text-slate-600">Работа</td>
           <td className="px-4 py-3 text-slate-600">{formatDateTime(event.received_at)}</td>
           <td className="px-4 py-3 font-mono text-xs text-slate-500">{event.raw_signal}</td>
         </tr>
@@ -105,17 +106,17 @@ export const InvalidSignalsPage = () => {
 
   return (
     <LogLayout
-      title="Журнал invalid_signal"
-      description="Поврежденные или неполные сигналы фиксируются отдельно."
+      title="Журнал невалидных сигналов"
+      description="События типа invalid_signal фиксируются отдельно."
       hasData={filtered.length > 0}
       headers={['Событие', 'Устройство', 'Время', 'raw_signal']}
       emptyTitle="Невалидных сигналов нет"
-      emptyDescription="Сейчас симулятор и mock API работают чисто."
+      emptyDescription="Сейчас невалидные сигналы не зафиксированы."
       filters={
         <Card className="p-4">
           <div className="relative max-w-md">
             <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-            <Input className="pl-9" placeholder="Поиск по invalid signals" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <Input className="pl-9" placeholder="Поиск по невалидным сигналам" value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
         </Card>
       }
@@ -167,17 +168,17 @@ export const ErrorsLogPage = () => {
           </Select>
           <Select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
             <option value="all">Любой уровень</option>
-            <option value="warning">warning</option>
-            <option value="error">error</option>
+            <option value="warning">Предупреждение</option>
+            <option value="error">Ошибка</option>
           </Select>
         </Card>
       }
     >
       {filtered.map((error) => (
         <tr key={error.id}>
-          <td className="px-4 py-3 text-slate-600">{error.component}</td>
+          <td className="px-4 py-3 text-slate-600">{getErrorComponentLabel(error.component)}</td>
           <td className="px-4 py-3">
-            <Badge tone={getStatusTone(error.level)}>{error.level}</Badge>
+            <Badge tone={getStatusTone(error.level)}>{getLogLevelLabel(error.level)}</Badge>
           </td>
           <td className="px-4 py-3 text-slate-600">{error.message}</td>
           <td className="px-4 py-3 text-slate-600">

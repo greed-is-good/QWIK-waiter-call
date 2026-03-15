@@ -35,12 +35,12 @@ interface AppState extends ReturnType<typeof createInitialState> {
   dismissNotification: (id: string) => void
   setSelectedChatEmployeeId: (employeeId: string) => void
   switchMode: (mode: AppState['systemMode']) => void
-  saveEmployee: (draft: EmployeeDraft) => void
-  saveService: (draft: ServiceDraft) => void
-  saveTable: (draft: TableDraft) => void
-  saveBinding: (draft: BindingDraft) => void
-  setBindingActive: (radioButtonId: string, isActive: boolean) => void
-  createBindingFromNewButton: (radioButtonId: string, tableId: string, serviceId: string) => void
+  saveEmployee: (draft: EmployeeDraft) => boolean
+  saveService: (draft: ServiceDraft) => boolean
+  saveTable: (draft: TableDraft) => boolean
+  saveBinding: (draft: BindingDraft) => boolean
+  setBindingActive: (radioButtonId: string, isActive: boolean) => boolean
+  createBindingFromNewButton: (radioButtonId: string, tableId: string, serviceId: string) => boolean
   manualResetAssignment: (assignmentId: string) => void
   simulateCheckClose: (tableId: string) => void
   simulateSignal: (payload: SimulateSignalInput) => void
@@ -65,6 +65,59 @@ type PersistedState = Pick<
   | 'settings'
   | 'selectedChatEmployeeId'
 >
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const mergePersistedState = (persistedState: unknown, currentState: AppState): AppState => {
+  const persisted = isRecord(persistedState) ? (persistedState as Partial<PersistedState>) : {}
+  const persistedSettings = isRecord(persisted.settings)
+    ? (persisted.settings as Partial<AppState['settings']>)
+    : undefined
+  const persistedIiko = isRecord(persisted.iiko)
+    ? (persisted.iiko as Partial<AppState['iiko']>)
+    : undefined
+
+  return {
+    ...currentState,
+    authUser: isRecord(persisted.authUser) ? (persisted.authUser as AppState['authUser']) : currentState.authUser,
+    systemMode:
+      persisted.systemMode === 'configuration' || persisted.systemMode === 'work'
+        ? persisted.systemMode
+        : currentState.systemMode,
+    services: Array.isArray(persisted.services) ? persisted.services : currentState.services,
+    tables: Array.isArray(persisted.tables) ? persisted.tables : currentState.tables,
+    employees: Array.isArray(persisted.employees) ? persisted.employees : currentState.employees,
+    bindings: Array.isArray(persisted.bindings) ? persisted.bindings : currentState.bindings,
+    callEvents: Array.isArray(persisted.callEvents) ? persisted.callEvents : currentState.callEvents,
+    assignments: Array.isArray(persisted.assignments) ? persisted.assignments : currentState.assignments,
+    chatMessages: Array.isArray(persisted.chatMessages) ? persisted.chatMessages : currentState.chatMessages,
+    newButtons: Array.isArray(persisted.newButtons) ? persisted.newButtons : currentState.newButtons,
+    techLogs: Array.isArray(persisted.techLogs) ? persisted.techLogs : currentState.techLogs,
+    errorLogs: Array.isArray(persisted.errorLogs) ? persisted.errorLogs : currentState.errorLogs,
+    iiko: {
+      ...currentState.iiko,
+      ...(persistedIiko ?? {}),
+      event_logs: Array.isArray(persistedIiko?.event_logs)
+        ? persistedIiko.event_logs
+        : currentState.iiko.event_logs,
+    },
+    settings: {
+      ...currentState.settings,
+      ...(persistedSettings ?? {}),
+      client_devices: Array.isArray(persistedSettings?.client_devices)
+        ? persistedSettings.client_devices
+        : currentState.settings.client_devices,
+      health_checks: Array.isArray(persistedSettings?.health_checks)
+        ? persistedSettings.health_checks
+        : currentState.settings.health_checks,
+    },
+    selectedChatEmployeeId:
+      typeof persisted.selectedChatEmployeeId === 'string'
+        ? persisted.selectedChatEmployeeId
+        : currentState.selectedChatEmployeeId,
+  }
+}
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -167,13 +220,37 @@ export const useAppStore = create<AppState>()(
           pushNotification('success', 'Режим обновлен', mode === 'work' ? 'Whitelist-обработка активна' : 'Система принимает новые кнопки')
         },
         saveEmployee: (draft) => {
+          const fullName = draft.full_name.trim()
+          const maxUserId = draft.max_user_id.trim()
+
+          if (!fullName) {
+            pushNotification('error', 'Укажи имя сотрудника')
+            return false
+          }
+
+          if (draft.role !== 'admin' && draft.is_active && !maxUserId) {
+            pushNotification('warning', 'MAX user id обязателен', 'Активный сотрудник должен быть доступен для MAX-вызовов')
+            return false
+          }
+
+          if (
+            draft.id &&
+            !draft.is_active &&
+            get().assignments.some(
+              (assignment) => assignment.assigned_employee_id === draft.id && assignment.status === 'active',
+            )
+          ) {
+            pushNotification('warning', 'Нельзя деактивировать сотрудника', 'Сначала сними активные закрепления по столам')
+            return false
+          }
+
           set((state) => {
             const employeeId = draft.id ?? createId('emp')
             const employee = {
               id: employeeId,
-              full_name: draft.full_name.trim(),
+              full_name: fullName,
               role: draft.role,
-              max_user_id: draft.max_user_id.trim(),
+              max_user_id: maxUserId,
               is_active: draft.is_active,
             }
 
@@ -190,13 +267,47 @@ export const useAppStore = create<AppState>()(
             }
           })
           pushNotification('success', 'Сотрудник сохранен')
+          return true
         },
         saveService: (draft) => {
+          const name = draft.name.trim()
+
+          if (!name) {
+            pushNotification('error', 'Укажи название услуги')
+            return false
+          }
+
+          if (draft.id && !draft.is_active) {
+            const state = get()
+            const serviceScope = getAssignmentScope(draft.id)
+            const hasActiveBinding = state.bindings.some(
+              (binding) => binding.service_id === draft.id && binding.is_active,
+            )
+            const hasOpenCall = state.callEvents.some(
+              (event) =>
+                event.service_id === draft.id &&
+                (event.status === 'received' || event.status === 'routed' || event.status === 'notified'),
+            )
+            const hasActiveAssignment = state.assignments.some(
+              (assignment) =>
+                assignment.assignment_scope === serviceScope && assignment.status === 'active',
+            )
+
+            if (hasActiveBinding || hasOpenCall || hasActiveAssignment) {
+              pushNotification(
+                'warning',
+                'Нельзя деактивировать услугу',
+                'Услуга используется в активных привязках или текущих вызовах',
+              )
+              return false
+            }
+          }
+
           set((state) => {
             const serviceId = draft.id ?? createId('svc')
             const service = {
               id: serviceId,
-              name: draft.name.trim(),
+              name,
               is_active: draft.is_active,
             }
 
@@ -213,13 +324,45 @@ export const useAppStore = create<AppState>()(
             }
           })
           pushNotification('success', 'Услуга сохранена')
+          return true
         },
         saveTable: (draft) => {
+          const name = draft.name.trim()
+
+          if (!name) {
+            pushNotification('error', 'Укажи название стола')
+            return false
+          }
+
+          if (draft.id && !draft.is_active) {
+            const state = get()
+            const hasActiveBinding = state.bindings.some(
+              (binding) => binding.table_id === draft.id && binding.is_active,
+            )
+            const hasOpenCall = state.callEvents.some(
+              (event) =>
+                event.table_id === draft.id &&
+                (event.status === 'received' || event.status === 'routed' || event.status === 'notified'),
+            )
+            const hasActiveAssignment = state.assignments.some(
+              (assignment) => assignment.table_id === draft.id && assignment.status === 'active',
+            )
+
+            if (hasActiveBinding || hasOpenCall || hasActiveAssignment) {
+              pushNotification(
+                'warning',
+                'Нельзя деактивировать стол',
+                'Стол участвует в активных привязках или текущем обслуживании',
+              )
+              return false
+            }
+          }
+
           set((state) => {
             const tableId = draft.id ?? createId('table')
             const table = {
               id: tableId,
-              name: draft.name.trim(),
+              name,
               zone: draft.zone,
               is_active: draft.is_active,
             }
@@ -237,14 +380,40 @@ export const useAppStore = create<AppState>()(
             }
           })
           pushNotification('success', 'Стол сохранен')
+          return true
         },
         saveBinding: (draft) => {
           const radioId = normalizeRadioButtonId(draft.radio_button_id ?? '')
           if (!radioId) {
             pushNotification('error', 'Укажи radio_button_id')
-            return
+            return false
           }
 
+          if (!draft.table_id || !draft.service_id) {
+            pushNotification('error', 'Выбери стол и услугу')
+            return false
+          }
+
+          const currentState = get()
+          const table = currentState.tables.find((item) => item.id === draft.table_id)
+          const service = currentState.services.find((item) => item.id === draft.service_id)
+
+          if (!table || !service) {
+            pushNotification('error', 'Не удалось найти стол или услугу')
+            return false
+          }
+
+          if (draft.is_active && !table.is_active) {
+            pushNotification('warning', 'Стол неактивен', 'Активную привязку можно создавать только для активного стола')
+            return false
+          }
+
+          if (draft.is_active && !service.is_active) {
+            pushNotification('warning', 'Услуга неактивна', 'Активную привязку можно создавать только для активной услуги')
+            return false
+          }
+
+          let isSaved = true
           set((state) => {
             const currentId = draft.original_radio_button_id ?? radioId
             const exists = state.bindings.some(
@@ -253,6 +422,7 @@ export const useAppStore = create<AppState>()(
 
             if (exists) {
               pushNotification('warning', 'Такой radio_button_id уже существует')
+              isSaved = false
               return state
             }
 
@@ -279,9 +449,37 @@ export const useAppStore = create<AppState>()(
               ],
             }
           })
+
+          if (!isSaved) {
+            return false
+          }
+
           pushNotification('success', 'Привязка сохранена')
+          return true
         },
         setBindingActive: (radioButtonId, isActive) => {
+          const binding = get().bindings.find((item) => item.radio_button_id === radioButtonId)
+
+          if (!binding) {
+            return false
+          }
+
+          if (isActive) {
+            const state = get()
+            const table = state.tables.find((item) => item.id === binding.table_id)
+            const service = state.services.find((item) => item.id === binding.service_id)
+
+            if (!table?.is_active) {
+              pushNotification('warning', 'Нельзя активировать привязку', 'Привязанный стол неактивен')
+              return false
+            }
+
+            if (!service?.is_active) {
+              pushNotification('warning', 'Нельзя активировать привязку', 'Привязанная услуга неактивна')
+              return false
+            }
+          }
+
           set((state) => ({
             bindings: state.bindings.map((binding) =>
               binding.radio_button_id === radioButtonId ? { ...binding, is_active: isActive } : binding,
@@ -296,8 +494,28 @@ export const useAppStore = create<AppState>()(
             ],
           }))
           pushNotification(isActive ? 'success' : 'warning', isActive ? 'Привязка активна' : 'Привязка выключена')
+          return true
         },
         createBindingFromNewButton: (radioButtonId, tableId, serviceId) => {
+          const state = get()
+          const table = state.tables.find((item) => item.id === tableId)
+          const service = state.services.find((item) => item.id === serviceId)
+
+          if (!table || !service) {
+            pushNotification('error', 'Не удалось найти стол или услугу')
+            return false
+          }
+
+          if (!table.is_active || !service.is_active) {
+            pushNotification('warning', 'Нельзя создать привязку', 'Выбери активные стол и услугу')
+            return false
+          }
+
+          if (state.bindings.some((binding) => binding.radio_button_id === radioButtonId)) {
+            pushNotification('warning', 'Такая привязка уже существует')
+            return false
+          }
+
           set((state) => ({
             bindings: [
               {
@@ -316,6 +534,7 @@ export const useAppStore = create<AppState>()(
             ],
           }))
           pushNotification('success', 'Новая привязка создана')
+          return true
         },
         manualResetAssignment: (assignmentId) => {
           const assignment = get().assignments.find((item) => item.id === assignmentId)
@@ -582,6 +801,11 @@ export const useAppStore = create<AppState>()(
             return
           }
 
+          if (!employee.max_user_id.trim()) {
+            pushNotification('warning', 'Не заполнен MAX user id', 'Сотрудник не может подтверждать вызовы без идентификатора в MAX')
+            return
+          }
+
           if (scope === 'hookah' && employee.role !== 'hookah') {
             pushNotification('warning', 'Вызов доступен только кальянщику')
             return
@@ -655,7 +879,9 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: storageKey,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      merge: mergePersistedState,
       partialize: (state): PersistedState => ({
         authUser: state.authUser,
         systemMode: state.systemMode,

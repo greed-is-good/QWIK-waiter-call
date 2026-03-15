@@ -17,10 +17,18 @@ import {
 } from '../components/ui'
 import {
   buildTimeline,
+  getAssignmentStatusLabel,
+  getDerivedTableStatus,
+  getDerivedTableStatusLabel,
+  getDerivedTableStatusTone,
   formatDateTime,
   formatDuration,
   getAssignmentSummary,
+  getCallStatusLabel,
   getEmployeeName,
+  isPendingWorkingCallStatus,
+  isRegistryCallStatus,
+  getReleaseReasonLabel,
   getScopeLabel,
   getServiceName,
   getStatusTone,
@@ -33,6 +41,10 @@ export const CallsRegistryPage = () => {
   const services = useAppStore((state) => state.services)
   const tables = useAppStore((state) => state.tables)
   const employees = useAppStore((state) => state.employees)
+  const registryEvents = useMemo(
+    () => callEvents.filter((event) => isRegistryCallStatus(event.status)),
+    [callEvents],
+  )
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -41,7 +53,7 @@ export const CallsRegistryPage = () => {
 
   const filtered = useMemo(
     () =>
-      [...callEvents]
+      [...registryEvents]
         .sort((left, right) => new Date(right.received_at).getTime() - new Date(left.received_at).getTime())
         .filter((event) => {
           const statusMatches = statusFilter === 'all' || event.status === statusFilter
@@ -59,14 +71,14 @@ export const CallsRegistryPage = () => {
 
           return statusMatches && serviceMatches && textMatches
         }),
-    [callEvents, search, serviceFilter, services, statusFilter, tables],
+    [registryEvents, search, serviceFilter, services, statusFilter, tables],
   )
 
-  const selectedEvent = callEvents.find((event) => event.event_id === selectedEventId) ?? null
-  const activeCalls = callEvents.filter((event) => event.status === 'notified').length
-  const confirmedCalls = callEvents.filter((event) => event.status === 'confirmed').length
+  const selectedEvent = registryEvents.find((event) => event.event_id === selectedEventId) ?? null
+  const activeCalls = registryEvents.filter((event) => isPendingWorkingCallStatus(event.status)).length
+  const confirmedCalls = registryEvents.filter((event) => event.status === 'confirmed').length
   const avgReactionSeconds = Math.round(
-    callEvents
+    registryEvents
       .filter((event) => event.confirmed_at)
       .reduce((accumulator, event, _, array) => {
         const seconds =
@@ -79,25 +91,25 @@ export const CallsRegistryPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Реестр вызовов"
-        description="Все вызовы, включая рабочие и технические статусы, с деталями и таймлайном."
+        description="Рабочие вызовы по столам с подтверждением, временем реакции и деталями обработки."
       />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Активные вызовы" value={activeCalls} caption="Статус notified" />
-        <StatCard label="Подтвержденные" value={confirmedCalls} caption="Статус confirmed" />
+        <StatCard label="Активные вызовы" value={activeCalls} caption="Ожидают подтверждения" />
+        <StatCard label="Подтвержденные" value={confirmedCalls} caption="Статус: Подтвержден" />
         <StatCard label="Среднее время реакции" value={`${avgReactionSeconds || 0}с`} caption="По подтвержденным вызовам" />
       </div>
       <Card className="grid gap-4 p-4 md:grid-cols-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-          <Input className="pl-9" placeholder="Поиск по event, столу, устройству" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input className="pl-9" placeholder="Поиск по вызову, столу, устройству" value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
         <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
           <option value="all">Все статусы</option>
-          <option value="notified">notified</option>
-          <option value="confirmed">confirmed</option>
-          <option value="unknown_button">unknown_button</option>
-          <option value="invalid_signal">invalid_signal</option>
-          <option value="error">error</option>
+          <option value="received">Получен</option>
+          <option value="routed">Маршрутизирован</option>
+          <option value="notified">Отправлен в чат</option>
+          <option value="confirmed">Подтвержден</option>
+          <option value="error">Ошибка</option>
         </Select>
         <Select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)}>
           <option value="all">Все услуги</option>
@@ -109,19 +121,20 @@ export const CallsRegistryPage = () => {
         </Select>
       </Card>
       {filtered.length === 0 ? (
-        <EmptyState title="Вызовы не найдены" description="Попробуй изменить фильтры или создай новые события через симулятор." />
+        <EmptyState title="Вызовы не найдены" description="Попробуй изменить фильтры или дождись новых рабочих вызовов." />
       ) : (
-        <DataTable headers={['Event', 'Стол', 'Услуга', 'Статус', 'Устройство', 'Время', 'Отклик', 'Действия']}>
+        <DataTable headers={['Вызов', 'Стол', 'Услуга', 'Сотрудник', 'Статус', 'Получен', 'Подтвержден', 'Реакция', 'Действия']}>
           {filtered.map((event) => (
             <tr key={event.event_id}>
               <td className="px-4 py-3 font-semibold text-slate-900">{event.event_id}</td>
               <td className="px-4 py-3 text-slate-600">{getTableName(event.table_id, tables)}</td>
               <td className="px-4 py-3 text-slate-600">{getServiceName(event.service_id, services)}</td>
+              <td className="px-4 py-3 text-slate-600">{getEmployeeName(event.responded_by_employee_id, employees)}</td>
               <td className="px-4 py-3">
-                <Badge tone={getStatusTone(event.status)}>{event.status}</Badge>
+                <Badge tone={getStatusTone(event.status)}>{getCallStatusLabel(event.status)}</Badge>
               </td>
-              <td className="px-4 py-3 text-slate-600">{event.client_device_id}</td>
               <td className="px-4 py-3 text-slate-600">{formatDateTime(event.received_at)}</td>
+              <td className="px-4 py-3 text-slate-600">{formatDateTime(event.confirmed_at)}</td>
               <td className="px-4 py-3 text-slate-600">
                 {event.confirmed_at ? formatDuration(event.received_at, event.confirmed_at) : '—'}
               </td>
@@ -141,15 +154,16 @@ export const CallsRegistryPage = () => {
             <Card className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-lg font-semibold text-slate-950">Основные данные</h3>
-                <Badge tone={getStatusTone(selectedEvent.status)}>{selectedEvent.status}</Badge>
+                <Badge tone={getStatusTone(selectedEvent.status)}>{getCallStatusLabel(selectedEvent.status)}</Badge>
               </div>
               <div className="mt-4">
                 <KeyValue label="Стол" value={getTableName(selectedEvent.table_id, tables)} />
                 <KeyValue label="Услуга" value={getServiceName(selectedEvent.service_id, services)} />
                 <KeyValue label="radio_button_id" value={selectedEvent.radio_button_id || '—'} />
                 <KeyValue label="Устройство" value={selectedEvent.client_device_id} />
-                <KeyValue label="Откликнулся" value={getEmployeeName(selectedEvent.responded_by_employee_id, employees)} />
-                <KeyValue label="Raw signal" value={<span className="font-mono text-xs">{selectedEvent.raw_signal}</span>} />
+                <KeyValue label="Подтвердил" value={getEmployeeName(selectedEvent.responded_by_employee_id, employees)} />
+                <KeyValue label="Подтвержден" value={formatDateTime(selectedEvent.confirmed_at)} />
+                <KeyValue label="Сырой сигнал" value={<span className="font-mono text-xs">{selectedEvent.raw_signal}</span>} />
                 {selectedEvent.note ? <KeyValue label="Заметка" value={selectedEvent.note} /> : null}
               </div>
             </Card>
@@ -183,6 +197,14 @@ export const TablesAssignmentsPage = () => {
   const [zoneFilter, setZoneFilter] = useState('all')
   const [selectedTableId, setSelectedTableId] = useState<string>(tables[0]?.id ?? '')
   const [resetAssignmentId, setResetAssignmentId] = useState<string | null>(null)
+  const derivedStatuses = useMemo(
+    () =>
+      tables.map((table) => ({
+        tableId: table.id,
+        status: getDerivedTableStatus(table.id, callEvents),
+      })),
+    [callEvents, tables],
+  )
 
   const filteredTables = useMemo(
     () =>
@@ -199,11 +221,13 @@ export const TablesAssignmentsPage = () => {
     .sort((left, right) => new Date(right.assigned_at).getTime() - new Date(left.assigned_at).getTime())
 
   const selectedTableCalls = callEvents
-    .filter((event) => event.table_id === selectedTableId)
+    .filter((event) => event.table_id === selectedTableId && isRegistryCallStatus(event.status))
     .sort((left, right) => new Date(right.received_at).getTime() - new Date(left.received_at).getTime())
 
-  const activeWaiter = assignments.filter((assignment) => assignment.status === 'active' && assignment.assignment_scope === 'waiter').length
-  const activeHookah = assignments.filter((assignment) => assignment.status === 'active' && assignment.assignment_scope === 'hookah').length
+  const freeTables = derivedStatuses.filter((item) => item.status === 'free').length
+  const waitingTables = derivedStatuses.filter((item) => item.status === 'waiting').length
+  const confirmedTables = derivedStatuses.filter((item) => item.status === 'confirmed').length
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active').length
 
   return (
     <div className="space-y-6">
@@ -211,10 +235,11 @@ export const TablesAssignmentsPage = () => {
         title="Столы и закрепления"
         description="Контроль waiter/hookah закреплений по столам, история и ручной сброс."
       />
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Waiter-закрепления" value={activeWaiter} caption="Активные" />
-        <StatCard label="Hookah-закрепления" value={activeHookah} caption="Активные" />
-        <StatCard label="Свободные столы" value={tables.length - activeWaiter} caption="Без waiter assignment" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Свободные столы" value={freeTables} />
+        <StatCard label="Столы в ожидании" value={waitingTables} />
+        <StatCard label="Подтвержденные столы" value={confirmedTables} />
+        <StatCard label="Активные закрепления" value={activeAssignments} caption="Официант и кальян" />
       </div>
       <Card className="grid gap-4 p-4 md:grid-cols-2">
         <div className="relative">
@@ -243,7 +268,10 @@ export const TablesAssignmentsPage = () => {
                 assignment.assignment_scope === 'hookah' &&
                 assignment.status === 'active',
             )
-            const openCalls = callEvents.filter((event) => event.table_id === table.id && event.status === 'notified').length
+            const tableStatus = getDerivedTableStatus(table.id, callEvents)
+            const openCalls = callEvents.filter(
+              (event) => event.table_id === table.id && isPendingWorkingCallStatus(event.status),
+            ).length
 
             return (
               <Card
@@ -256,9 +284,16 @@ export const TablesAssignmentsPage = () => {
                     <h3 className="text-lg font-semibold text-slate-950">{table.name}</h3>
                     <p className="text-sm text-slate-500">{table.zone}</p>
                   </div>
-                  <Badge tone={openCalls > 0 ? 'warning' : 'neutral'}>
-                    {openCalls > 0 ? `${openCalls} активн.` : 'Тихо'}
+                  <Badge tone={getDerivedTableStatusTone(tableStatus)}>
+                    {getDerivedTableStatusLabel(tableStatus)}
                   </Badge>
+                </div>
+                <div className="mt-4 text-sm text-slate-500">
+                  {openCalls > 0
+                    ? `Неподтвержденных вызовов: ${openCalls}`
+                    : tableStatus === 'confirmed'
+                      ? 'Последний вызов подтвержден'
+                      : 'Активных вызовов нет'}
                 </div>
                 <div className="mt-5 space-y-3">
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -270,7 +305,7 @@ export const TablesAssignmentsPage = () => {
                         setResetAssignmentId(waiterAssignment.id)
                       }}>
                         <RefreshCcw className="mr-2 h-4 w-4" />
-                        Сбросить waiter
+                        Сбросить официанта
                       </Button>
                     ) : null}
                   </div>
@@ -283,7 +318,7 @@ export const TablesAssignmentsPage = () => {
                         setResetAssignmentId(hookahAssignment.id)
                       }}>
                         <RefreshCcw className="mr-2 h-4 w-4" />
-                        Сбросить hookah
+                        Сбросить кальянщика
                       </Button>
                     ) : null}
                   </div>
@@ -306,9 +341,7 @@ export const TablesAssignmentsPage = () => {
                       <div className="font-medium text-slate-900">
                         {getScopeLabel(assignment.assignment_scope)} · {getEmployeeName(assignment.assigned_employee_id, employees)}
                       </div>
-                      <Badge tone={assignment.status === 'active' ? 'success' : 'neutral'}>
-                        {assignment.status}
-                      </Badge>
+                      <Badge tone={assignment.status === 'active' ? 'success' : 'neutral'}>{getAssignmentStatusLabel(assignment.status)}</Badge>
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       Назначен: {formatDateTime(assignment.assigned_at)}
@@ -316,7 +349,7 @@ export const TablesAssignmentsPage = () => {
                     </div>
                     {assignment.release_reason ? (
                       <div className="mt-1 text-xs uppercase tracking-[0.08em] text-slate-400">
-                        reason: {assignment.release_reason}
+                        причина: {getReleaseReasonLabel(assignment.release_reason)}
                       </div>
                     ) : null}
                   </div>
@@ -334,7 +367,7 @@ export const TablesAssignmentsPage = () => {
                   <div key={event.event_id} className="rounded-2xl bg-slate-50 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-medium text-slate-900">{getServiceName(event.service_id, services)}</div>
-                      <Badge tone={getStatusTone(event.status)}>{event.status}</Badge>
+                      <Badge tone={getStatusTone(event.status)}>{getCallStatusLabel(event.status)}</Badge>
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       {formatDateTime(event.received_at)} · {event.event_id}

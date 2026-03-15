@@ -131,8 +131,9 @@ export const EmployeesPage = () => {
             </Button>
             <Button
               onClick={() => {
-                saveEmployee(draft)
-                setIsModalOpen(false)
+                if (saveEmployee(draft)) {
+                  setIsModalOpen(false)
+                }
               }}
             >
               Сохранить
@@ -140,7 +141,11 @@ export const EmployeesPage = () => {
           </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Для активного официанта или кальянщика обязателен MAX user id. Сотрудника с активным закреплением деактивировать нельзя.
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           <Field label="ФИО">
             <Input value={draft.full_name} onChange={(event) => setDraft((current) => ({ ...current, full_name: event.target.value }))} />
           </Field>
@@ -151,7 +156,7 @@ export const EmployeesPage = () => {
               <option value="admin">Администратор</option>
             </Select>
           </Field>
-          <Field label="MAX user id">
+          <Field label="MAX user id" hint="обязательно для активного сотрудника">
             <Input value={draft.max_user_id} onChange={(event) => setDraft((current) => ({ ...current, max_user_id: event.target.value }))} />
           </Field>
           <Field label="Статус">
@@ -160,6 +165,7 @@ export const EmployeesPage = () => {
               <option value="false">Неактивен</option>
             </Select>
           </Field>
+          </div>
         </div>
       </Modal>
     </div>
@@ -240,8 +246,9 @@ export const ServicesPage = () => {
             </Button>
             <Button
               onClick={() => {
-                saveService(draft)
-                setIsModalOpen(false)
+                if (saveService(draft)) {
+                  setIsModalOpen(false)
+                }
               }}
             >
               Сохранить
@@ -249,7 +256,11 @@ export const ServicesPage = () => {
           </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Если услуга используется в активных привязках или текущих вызовах, деактивация будет заблокирована.
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           <Field label="Название">
             <Input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
           </Field>
@@ -259,6 +270,7 @@ export const ServicesPage = () => {
               <option value="false">Неактивна</option>
             </Select>
           </Field>
+          </div>
         </div>
       </Modal>
     </div>
@@ -352,8 +364,9 @@ export const TablesPage = () => {
             </Button>
             <Button
               onClick={() => {
-                saveTable(draft)
-                setIsModalOpen(false)
+                if (saveTable(draft)) {
+                  setIsModalOpen(false)
+                }
               }}
             >
               Сохранить
@@ -361,7 +374,11 @@ export const TablesPage = () => {
           </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Если стол участвует в активных привязках или текущем обслуживании, деактивация будет заблокирована.
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           <Field label="Название">
             <Input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
           </Field>
@@ -378,6 +395,7 @@ export const TablesPage = () => {
               <option value="false">Неактивен</option>
             </Select>
           </Field>
+          </div>
         </div>
       </Modal>
     </div>

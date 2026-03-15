@@ -1,5 +1,5 @@
 import { AlertTriangle, BarChart3, Bot, Cable, CheckCircle2, Play, ShieldAlert } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -32,11 +32,17 @@ import {
 } from '../lib/analytics'
 import {
   formatDateTime,
+  getChatMessageStateLabel,
+  getDeviceStatusLabel,
   getEmployeeName,
+  getIikoEventTypeLabel,
+  getIikoStatusLabel,
+  getHealthStatusLabel,
   getRoleLabel,
   getServiceName,
   getStatusTone,
   getTableName,
+  isRegistryCallStatus,
 } from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
 
@@ -127,7 +133,7 @@ export const IntegrationsPage = () => {
         description="Mock-слой статуса интеграции, лента событий и ручной триггер check_closed."
       />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Статус IIKO" value={iiko.status} caption={`Last sync: ${formatDateTime(iiko.last_sync_at)}`} />
+        <StatCard label="Статус IIKO" value={getIikoStatusLabel(iiko.status)} caption={`Последняя синхронизация: ${formatDateTime(iiko.last_sync_at)}`} />
         <StatCard label="Активных чеков" value={assignments.filter((item) => item.status === 'active' && item.assignment_scope === 'waiter').length} />
         <StatCard label="IIKO событий" value={iiko.event_logs.length} />
       </div>
@@ -155,7 +161,7 @@ export const IntegrationsPage = () => {
             </Button>
           </div>
           <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-            Активный waiter assignment: <span className="font-semibold text-slate-900">{assignments.find((item) => item.table_id === tableId && item.status === 'active' && item.assignment_scope === 'waiter')?.iiko_check_id ?? 'нет'}</span>
+            Активное закрепление официанта: <span className="font-semibold text-slate-900">{assignments.find((item) => item.table_id === tableId && item.status === 'active' && item.assignment_scope === 'waiter')?.iiko_check_id ?? 'нет'}</span>
           </div>
         </Card>
         <Card className="p-6">
@@ -165,7 +171,7 @@ export const IntegrationsPage = () => {
               <div key={log.id} className="rounded-2xl bg-slate-50 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <Badge tone={log.type === 'check_closed' || log.type === 'sync' ? 'success' : log.type === 'warning' ? 'warning' : 'error'}>
-                    {log.type}
+                    {getIikoEventTypeLabel(log.type)}
                   </Badge>
                   <span className="text-sm text-slate-500">{formatDateTime(log.created_at)}</span>
                 </div>
@@ -185,12 +191,18 @@ export const AnalyticsPage = () => {
   const tables = useAppStore((state) => state.tables)
   const employees = useAppStore((state) => state.employees)
   const assignments = useAppStore((state) => state.assignments)
+  const businessEvents = useMemo(
+    () => callEvents.filter((event) => isRegistryCallStatus(event.status)),
+    [callEvents],
+  )
 
   const kpis = {
-    totalCalls: callEvents.length,
-    confirmedRate: `${Math.round((callEvents.filter((event) => event.status === 'confirmed').length / callEvents.length) * 100)}%`,
+    totalCalls: businessEvents.length,
+    confirmedRate: businessEvents.length
+      ? `${Math.round((businessEvents.filter((event) => event.status === 'confirmed').length / businessEvents.length) * 100)}%`
+      : '0%',
     avgReaction: `${Math.round(
-      callEvents
+      businessEvents
         .map((event) => getReactionTimeMs(event) ?? 0)
         .filter(Boolean)
         .reduce((accumulator, value, _, array) => accumulator + value / array.length, 0) / 1000,
@@ -198,10 +210,10 @@ export const AnalyticsPage = () => {
     activeAssignments: assignments.filter((assignment) => assignment.status === 'active').length,
   }
 
-  const hourlyData = buildHourlyCalls(callEvents)
-  const reactionData = buildReactionTrend(callEvents)
-  const topTables = buildTopTables(callEvents, tables)
-  const topEmployees = buildTopEmployees(callEvents, employees)
+  const hourlyData = buildHourlyCalls(businessEvents)
+  const reactionData = buildReactionTrend(businessEvents)
+  const topTables = buildTopTables(businessEvents, tables)
+  const topEmployees = buildTopEmployees(businessEvents, employees)
 
   return (
     <div className="space-y-6">
@@ -211,7 +223,7 @@ export const AnalyticsPage = () => {
       />
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Всего вызовов" value={kpis.totalCalls} />
-        <StatCard label="Доля confirmed" value={kpis.confirmedRate} />
+        <StatCard label="Доля подтвержденных" value={kpis.confirmedRate} />
         <StatCard label="Средняя реакция" value={kpis.avgReaction} />
         <StatCard label="Активные закрепления" value={kpis.activeAssignments} />
       </div>
@@ -253,10 +265,10 @@ export const AnalyticsPage = () => {
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-950">Placeholder iframe DataLens</h3>
+          <h3 className="text-lg font-semibold text-slate-950">Заглушка iframe DataLens</h3>
           <div className="mt-4 flex h-72 items-center justify-center rounded-3xl border border-dashed border-emerald-200 bg-emerald-50 text-center text-sm text-emerald-900">
             <div>
-              <div className="font-semibold">Mock embed готов для замены на DataLens iframe</div>
+              <div className="font-semibold">Демо-встраивание готово для замены на реальный DataLens iframe</div>
               <div className="mt-2 text-emerald-700">Здесь будет встраиваемая аналитическая панель ресторана.</div>
             </div>
           </div>
@@ -279,7 +291,7 @@ export const AnalyticsPage = () => {
               {topEmployees.map((employee) => (
                 <div key={employee.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                   <span className="font-medium text-slate-900">{employee.name}</span>
-                  <Badge tone="success">{employee.confirmedCalls} confirmed</Badge>
+                  <Badge tone="success">{employee.confirmedCalls} подтверждений</Badge>
                 </div>
               ))}
             </div>
@@ -318,7 +330,7 @@ export const SettingsPage = () => {
           </div>
         </Card>
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-950">Client devices</h3>
+          <h3 className="text-lg font-semibold text-slate-950">Клиентские устройства</h3>
           <div className="mt-4 space-y-3">
             {settings.client_devices.map((device) => (
               <div key={device.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
@@ -327,7 +339,7 @@ export const SettingsPage = () => {
                   <div className="text-sm text-slate-500">{device.location}</div>
                 </div>
                 <Badge tone={device.status === 'online' ? 'success' : device.status === 'warning' ? 'warning' : 'error'}>
-                  {device.status}
+                  {getDeviceStatusLabel(device.status)}
                 </Badge>
               </div>
             ))}
@@ -335,14 +347,14 @@ export const SettingsPage = () => {
         </Card>
       </div>
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-slate-950">Health checks</h3>
+        <h3 className="text-lg font-semibold text-slate-950">Проверки состояния</h3>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {settings.health_checks.map((item) => (
             <div key={item.id} className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="font-medium text-slate-900">{item.name}</div>
                 <Badge tone={item.status === 'healthy' ? 'success' : item.status === 'warning' ? 'warning' : 'error'}>
-                  {item.status}
+                  {getHealthStatusLabel(item.status)}
                 </Badge>
               </div>
               <div className="mt-2 text-sm text-slate-500">{item.details}</div>
@@ -355,12 +367,14 @@ export const SettingsPage = () => {
 }
 
 export const SimulatorPage = () => {
-  const bindings = useAppStore((state) => state.bindings)
-  const services = useAppStore((state) => state.services)
-  const tables = useAppStore((state) => state.tables)
-  const employees = useAppStore((state) => state.employees.filter((employee) => employee.role !== 'admin'))
-  const chatMessages = useAppStore((state) => state.chatMessages)
-  const assignments = useAppStore((state) => state.assignments)
+  const bindings = useAppStore((state) => state.bindings ?? [])
+  const services = useAppStore((state) => state.services ?? [])
+  const tables = useAppStore((state) => state.tables ?? [])
+  const employees = useAppStore((state) =>
+    (state.employees ?? []).filter((employee) => employee.role !== 'admin'),
+  )
+  const chatMessages = useAppStore((state) => state.chatMessages ?? [])
+  const assignments = useAppStore((state) => state.assignments ?? [])
   const settings = useAppStore((state) => state.settings)
   const selectedChatEmployeeId = useAppStore((state) => state.selectedChatEmployeeId)
   const setSelectedChatEmployeeId = useAppStore((state) => state.setSelectedChatEmployeeId)
@@ -368,14 +382,45 @@ export const SimulatorPage = () => {
   const respondToChatMessage = useAppStore((state) => state.respondToChatMessage)
   const simulateCheckClose = useAppStore((state) => state.simulateCheckClose)
   const systemMode = useAppStore((state) => state.systemMode)
+  const clientDevices = settings.client_devices ?? []
 
   const [radioMode, setRadioMode] = useState<'binding' | 'manual'>('binding')
   const [selectedBindingId, setSelectedBindingId] = useState(bindings[0]?.radio_button_id ?? '')
   const [manualRadioId, setManualRadioId] = useState('RB-W-1003')
   const [selectedTableId, setSelectedTableId] = useState(tables[0]?.id ?? '')
   const [selectedServiceId, setSelectedServiceId] = useState(services[0]?.id ?? '')
-  const [clientDeviceId, setClientDeviceId] = useState(settings.client_devices[0]?.id ?? 'device-hall-1')
+  const [clientDeviceId, setClientDeviceId] = useState(clientDevices[0]?.id ?? 'device-hall-1')
   const [checkCloseTableId, setCheckCloseTableId] = useState('table-3')
+
+  useEffect(() => {
+    if (!selectedBindingId && bindings[0]?.radio_button_id) {
+      setSelectedBindingId(bindings[0].radio_button_id)
+    }
+  }, [bindings, selectedBindingId])
+
+  useEffect(() => {
+    if (!selectedTableId && tables[0]?.id) {
+      setSelectedTableId(tables[0].id)
+    }
+  }, [selectedTableId, tables])
+
+  useEffect(() => {
+    if (!selectedServiceId && services[0]?.id) {
+      setSelectedServiceId(services[0].id)
+    }
+  }, [selectedServiceId, services])
+
+  useEffect(() => {
+    if (!clientDeviceId && clientDevices[0]?.id) {
+      setClientDeviceId(clientDevices[0].id)
+    }
+  }, [clientDeviceId, clientDevices])
+
+  useEffect(() => {
+    if (!selectedChatEmployeeId && employees[0]?.id) {
+      setSelectedChatEmployeeId(employees[0].id)
+    }
+  }, [employees, selectedChatEmployeeId, setSelectedChatEmployeeId])
 
   const sortedMessages = useMemo(
     () =>
@@ -441,7 +486,7 @@ export const SimulatorPage = () => {
             </Field>
             <Field label="Client device">
               <Select value={clientDeviceId} onChange={(event) => setClientDeviceId(event.target.value)}>
-                {settings.client_devices.map((device) => (
+                {clientDevices.map((device) => (
                   <option key={device.id} value={device.id}>
                     {device.name}
                   </option>
@@ -487,7 +532,7 @@ export const SimulatorPage = () => {
                         {getTableName(message.table_id, tables)} · {getServiceName(message.service_id, services)}
                       </div>
                     </div>
-                    <Badge tone={message.state === 'open' ? 'warning' : 'success'}>{message.state}</Badge>
+                    <Badge tone={message.state === 'open' ? 'warning' : 'success'}>{getChatMessageStateLabel(message.state)}</Badge>
                   </div>
                   <div className="mt-3 text-xs uppercase tracking-[0.08em] text-slate-400">{formatDateTime(message.created_at)}</div>
                   {message.responded_by_employee_id ? (
