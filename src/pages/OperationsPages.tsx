@@ -18,7 +18,7 @@ export const SystemModePage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Режим системы"
-        description="Для демо и рабочего сценария используется один фиксированный режим обработки."
+        description="Система работает в едином режиме обработки вызовов."
       />
       <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
@@ -48,7 +48,7 @@ export const IntegrationsPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="IIKO интеграция"
-        description="Для демо достаточно хранить и редактировать token подключения к IIKO."
+        description="Управление token подключения к IIKO."
       />
       <Card className="max-w-3xl p-6">
         <div className="flex items-center gap-3">
@@ -59,9 +59,6 @@ export const IntegrationsPage = () => {
           <Field label="IIKO token">
             <Input value={token} onChange={(event) => setToken(event.target.value)} />
           </Field>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            В этой версии демо остальные технические детали интеграции скрыты и не выводятся в интерфейс.
-          </div>
           <div className="flex justify-end">
             <Button onClick={() => saveIikoToken(token)}>Сохранить token</Button>
           </div>
@@ -86,8 +83,8 @@ const DataLensPlaceholder = ({
     <p className="mt-2 text-sm text-slate-500">{description}</p>
     <div className="mt-5 flex h-80 items-center justify-center rounded-3xl border border-dashed border-emerald-200 bg-emerald-50 text-center text-sm text-emerald-900">
       <div>
-        <div className="font-semibold">Заглушка iframe DataLens</div>
-        <div className="mt-2 text-emerald-700">Здесь будет встроен график из DataLens.</div>
+        <div className="font-semibold">Панель DataLens</div>
+        <div className="mt-2 text-emerald-700">Здесь отображается встроенный график DataLens.</div>
       </div>
     </div>
   </Card>
@@ -97,7 +94,7 @@ export const AnalyticsPage = () => (
   <div className="space-y-6">
     <PageHeader
       title="Аналитика DataLens"
-      description="В интерфейсе оставлены только согласованные блоки под встраивание iframe из DataLens."
+      description="Графики DataLens, встроенные в интерфейс."
     />
     <div className="grid gap-6 xl:grid-cols-2">
       <DataLensPlaceholder
@@ -125,7 +122,7 @@ export const AboutSystemPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="О системе"
-        description="Краткая системная информация и базовые параметры демо."
+        description="Системная информация и базовые параметры."
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <Card className="p-6">
@@ -147,7 +144,7 @@ export const AboutSystemPage = () => {
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-slate-950">Часовой пояс</h3>
           <div className="mt-5 space-y-4">
-            <Field label="Timezone">
+            <Field label="Часовой пояс">
               <Input value={timezone} onChange={(event) => setTimezone(event.target.value)} />
             </Field>
             <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">

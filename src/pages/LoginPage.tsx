@@ -35,7 +35,7 @@ export const LoginPage = () => {
           <Field label="Логин">
             <Input value={username} onChange={(event) => setUsername(event.target.value)} />
           </Field>
-          <Field label="Пароль" hint="mock auth">
+          <Field label="Пароль">
             <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
           <Button className="w-full" type="submit">

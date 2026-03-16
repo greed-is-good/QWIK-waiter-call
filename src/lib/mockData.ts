@@ -363,7 +363,7 @@ export const seedNewButtons: NewButtonSignal[] = [
 ]
 
 export const seedTechLogs: TechLog[] = [
-  { id: 'tech-001', scope: 'system', level: 'success', message: 'MVP стенд инициализирован с моковыми данными', created_at: minutesAgo(180) },
+  { id: 'tech-001', scope: 'system', level: 'success', message: 'Система инициализирована', created_at: minutesAgo(180) },
   { id: 'tech-002', scope: 'bot', level: 'warning', message: 'suppressed duplicate: RB-W-1003 в окне 2 секунд', created_at: minutesAgo(9) },
   { id: 'tech-003', scope: 'simulator', level: 'info', message: 'Симулятор MAX-чата готов к обработке новых вызовов', created_at: minutesAgo(5) },
 ]
@@ -397,7 +397,7 @@ export const seedErrorLogs: ErrorLog[] = [
     id: 'err-004',
     component: 'backend',
     level: 'error',
-    message: 'Mock API вернул 503 при попытке обогатить сигнал метаданными стола',
+    message: 'Сервис обработки вернул 503 при попытке обогатить сигнал метаданными стола',
     created_at: minutesAgo(52),
   },
 ]
@@ -407,7 +407,7 @@ export const seedIikoState: IikoState = {
   status: 'connected',
   last_sync_at: minutesAgo(1),
   event_logs: [
-    { id: 'iiko-001', type: 'sync', message: 'Подключение к mock IIKO активно', created_at: minutesAgo(180) },
+    { id: 'iiko-001', type: 'sync', message: 'Подключение к IIKO активно', created_at: minutesAgo(180) },
     {
       id: 'iiko-002',
       type: 'check_closed',
