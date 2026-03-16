@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { AppShell } from './components/AppShell'
@@ -36,8 +36,10 @@ const LoginGuard = () => {
 }
 
 export default function App() {
+  const Router = import.meta.env.BASE_URL === '/' ? BrowserRouter : HashRouter
+
   return (
-    <BrowserRouter>
+    <Router>
       <AppErrorBoundary>
         <Routes>
           <Route path="/login" element={<LoginGuard />} />
@@ -61,6 +63,6 @@ export default function App() {
           </Route>
         </Routes>
       </AppErrorBoundary>
-    </BrowserRouter>
+    </Router>
   )
 }

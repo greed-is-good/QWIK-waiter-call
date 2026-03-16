@@ -2,10 +2,13 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // GitHub Pages serves project sites from /<repo-name>/, so production assets
+  // need a non-root base while local dev should stay on /.
+  base: command === 'build' ? '/QWIK-waiter-call/' : '/',
   plugins: [react(), tailwindcss()],
   server: {
     host: '0.0.0.0',
     port: 5173,
   },
-})
+}))
