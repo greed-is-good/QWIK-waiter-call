@@ -14,7 +14,7 @@ import {
   PageHeader,
   Select,
 } from '../components/ui'
-import { formatDateTime, getServiceName, getTableName } from '../lib/format'
+import { formatDateTime, getServiceName, getServiceRoleLabel, getTableName } from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
 import type { BindingDraft } from '../types'
 
@@ -233,12 +233,15 @@ export const BindingsPage = () => {
       {filtered.length === 0 ? (
         <EmptyState title="Привязки не найдены" description="Сними фильтры или создай новую привязку." />
       ) : (
-        <DataTable headers={['radio_button_id', 'Стол', 'Услуга', 'Статус', 'Создана', 'Действия']}>
+        <DataTable headers={['radio_button_id', 'Стол', 'Услуга', 'Роль', 'Статус', 'Создана', 'Действия']}>
           {filtered.map((binding) => (
             <tr key={binding.radio_button_id}>
               <td className="px-4 py-3 font-semibold text-slate-900">{binding.radio_button_id}</td>
               <td className="px-4 py-3 text-slate-600">{getTableName(binding.table_id, tables)}</td>
               <td className="px-4 py-3 text-slate-600">{getServiceName(binding.service_id, services)}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {getServiceRoleLabel(services.find((service) => service.id === binding.service_id)?.assigned_role ?? 'waiter')}
+              </td>
               <td className="px-4 py-3">
                 <Badge tone={binding.is_active ? 'success' : 'neutral'}>
                   {binding.is_active ? 'Активна' : 'Отключена'}
@@ -252,7 +255,7 @@ export const BindingsPage = () => {
                   </Button>
                   {binding.is_active ? (
                     <Button variant="danger" onClick={() => setConfirmId(binding.radio_button_id)}>
-                      Деактивировать
+                      Отключить
                     </Button>
                   ) : (
                     <Button variant="secondary" onClick={() => setBindingActive(binding.radio_button_id, true)}>
@@ -319,9 +322,9 @@ export const BindingsPage = () => {
       </Modal>
       <ConfirmDialog
         open={Boolean(confirmId)}
-        title="Деактивировать привязку?"
+        title="Отключить привязку?"
         description="После деактивации в режиме работы сигнал с этой кнопки попадет в unknown_button."
-        confirmText="Деактивировать"
+        confirmText="Подтвердить"
         onClose={() => setConfirmId(null)}
         onConfirm={() => {
           if (confirmId) {

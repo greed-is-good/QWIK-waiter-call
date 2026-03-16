@@ -1,55 +1,66 @@
-import { Eye, RefreshCcw, Search } from 'lucide-react'
+import { Eye, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import {
   Badge,
   Button,
   Card,
-  ConfirmDialog,
   DataTable,
   Drawer,
   EmptyState,
+  Input,
   KeyValue,
+  Modal,
   PageHeader,
   Select,
   StatCard,
-  Input,
 } from '../components/ui'
 import {
   buildTimeline,
-  getAssignmentStatusLabel,
-  getDerivedTableStatus,
-  getDerivedTableStatusLabel,
-  getDerivedTableStatusTone,
   formatDateTime,
   formatDuration,
   getAssignmentSummary,
+  getAssignmentStatusLabel,
   getCallStatusLabel,
+  getDerivedTableStatus,
+  getDerivedTableStatusLabel,
+  getDerivedTableStatusTone,
   getEmployeeName,
-  isPendingWorkingCallStatus,
-  isRegistryCallStatus,
   getReleaseReasonLabel,
   getScopeLabel,
   getServiceName,
   getStatusTone,
   getTableName,
+  isPendingWorkingCallStatus,
+  isRegistryCallStatus,
 } from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
+
+const isSameCalendarDay = (value: string, now: Date) => {
+  const date = new Date(value)
+
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  )
+}
 
 export const CallsRegistryPage = () => {
   const callEvents = useAppStore((state) => state.callEvents)
   const services = useAppStore((state) => state.services)
   const tables = useAppStore((state) => state.tables)
   const employees = useAppStore((state) => state.employees)
-  const registryEvents = useMemo(
-    () => callEvents.filter((event) => isRegistryCallStatus(event.status)),
-    [callEvents],
-  )
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [serviceFilter, setServiceFilter] = useState('all')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+
+  const registryEvents = useMemo(
+    () => callEvents.filter((event) => isRegistryCallStatus(event.status)),
+    [callEvents],
+  )
 
   const filtered = useMemo(
     () =>
@@ -64,6 +75,7 @@ export const CallsRegistryPage = () => {
             event.client_device_id,
             getTableName(event.table_id, tables),
             getServiceName(event.service_id, services),
+            getEmployeeName(event.responded_by_employee_id, employees),
           ]
             .join(' ')
             .toLowerCase()
@@ -71,14 +83,16 @@ export const CallsRegistryPage = () => {
 
           return statusMatches && serviceMatches && textMatches
         }),
-    [registryEvents, search, serviceFilter, services, statusFilter, tables],
+    [employees, registryEvents, search, serviceFilter, services, statusFilter, tables],
   )
 
   const selectedEvent = registryEvents.find((event) => event.event_id === selectedEventId) ?? null
-  const activeCalls = registryEvents.filter((event) => isPendingWorkingCallStatus(event.status)).length
-  const confirmedCalls = registryEvents.filter((event) => event.status === 'confirmed').length
+  const now = new Date()
+  const todayEvents = registryEvents.filter((event) => isSameCalendarDay(event.received_at, now))
+  const activeCalls = todayEvents.filter((event) => isPendingWorkingCallStatus(event.status)).length
+  const confirmedCalls = todayEvents.filter((event) => event.status === 'confirmed').length
   const avgReactionSeconds = Math.round(
-    registryEvents
+    todayEvents
       .filter((event) => event.confirmed_at)
       .reduce((accumulator, event, _, array) => {
         const seconds =
@@ -94,14 +108,19 @@ export const CallsRegistryPage = () => {
         description="Рабочие вызовы по столам с подтверждением, временем реакции и деталями обработки."
       />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Активные вызовы" value={activeCalls} caption="Ожидают подтверждения" />
-        <StatCard label="Подтвержденные" value={confirmedCalls} caption="Статус: Подтвержден" />
-        <StatCard label="Среднее время реакции" value={`${avgReactionSeconds || 0}с`} caption="По подтвержденным вызовам" />
+        <StatCard label="Активные вызовы" value={activeCalls} caption="За сегодня" />
+        <StatCard label="Подтвержденные" value={confirmedCalls} caption="За сегодня" />
+        <StatCard label="Среднее время реакции" value={`${avgReactionSeconds || 0}с`} caption="За сегодня" />
       </div>
       <Card className="grid gap-4 p-4 md:grid-cols-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-          <Input className="pl-9" placeholder="Поиск по вызову, столу, устройству" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input
+            className="pl-9"
+            placeholder="Поиск по вызову, столу, сотруднику"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </div>
         <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
           <option value="all">Все статусы</option>
@@ -148,7 +167,11 @@ export const CallsRegistryPage = () => {
           ))}
         </DataTable>
       )}
-      <Drawer open={Boolean(selectedEvent)} title={selectedEvent?.event_id ?? 'Детали вызова'} onClose={() => setSelectedEventId(null)}>
+      <Drawer
+        open={Boolean(selectedEvent)}
+        title={selectedEvent?.event_id ?? 'Детали вызова'}
+        onClose={() => setSelectedEventId(null)}
+      >
         {selectedEvent ? (
           <div className="space-y-6">
             <Card className="p-5">
@@ -163,7 +186,10 @@ export const CallsRegistryPage = () => {
                 <KeyValue label="Устройство" value={selectedEvent.client_device_id} />
                 <KeyValue label="Подтвердил" value={getEmployeeName(selectedEvent.responded_by_employee_id, employees)} />
                 <KeyValue label="Подтвержден" value={formatDateTime(selectedEvent.confirmed_at)} />
-                <KeyValue label="Сырой сигнал" value={<span className="font-mono text-xs">{selectedEvent.raw_signal}</span>} />
+                <KeyValue
+                  label="Сырой сигнал"
+                  value={<span className="font-mono text-xs">{selectedEvent.raw_signal}</span>}
+                />
                 {selectedEvent.note ? <KeyValue label="Заметка" value={selectedEvent.note} /> : null}
               </div>
             </Card>
@@ -171,7 +197,10 @@ export const CallsRegistryPage = () => {
               <h3 className="text-lg font-semibold text-slate-950">Таймлайн статусов</h3>
               <div className="mt-4 space-y-3">
                 {buildTimeline(selectedEvent).map((item) => (
-                  <div key={item.key} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
+                  >
                     <div className="font-medium text-slate-900">{item.label}</div>
                     <div className="text-sm text-slate-500">{formatDateTime(item.value)}</div>
                   </div>
@@ -191,20 +220,10 @@ export const TablesAssignmentsPage = () => {
   const employees = useAppStore((state) => state.employees)
   const assignments = useAppStore((state) => state.assignments)
   const callEvents = useAppStore((state) => state.callEvents)
-  const manualResetAssignment = useAppStore((state) => state.manualResetAssignment)
 
   const [search, setSearch] = useState('')
   const [zoneFilter, setZoneFilter] = useState('all')
-  const [selectedTableId, setSelectedTableId] = useState<string>(tables[0]?.id ?? '')
-  const [resetAssignmentId, setResetAssignmentId] = useState<string | null>(null)
-  const derivedStatuses = useMemo(
-    () =>
-      tables.map((table) => ({
-        tableId: table.id,
-        status: getDerivedTableStatus(table.id, callEvents),
-      })),
-    [callEvents, tables],
-  )
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
 
   const filteredTables = useMemo(
     () =>
@@ -224,6 +243,15 @@ export const TablesAssignmentsPage = () => {
     .filter((event) => event.table_id === selectedTableId && isRegistryCallStatus(event.status))
     .sort((left, right) => new Date(right.received_at).getTime() - new Date(left.received_at).getTime())
 
+  const derivedStatuses = useMemo(
+    () =>
+      tables.map((table) => ({
+        tableId: table.id,
+        status: getDerivedTableStatus(table.id, callEvents),
+      })),
+    [callEvents, tables],
+  )
+
   const freeTables = derivedStatuses.filter((item) => item.status === 'free').length
   const waitingTables = derivedStatuses.filter((item) => item.status === 'waiting').length
   const confirmedTables = derivedStatuses.filter((item) => item.status === 'confirmed').length
@@ -233,7 +261,7 @@ export const TablesAssignmentsPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Столы и закрепления"
-        description="Контроль waiter/hookah закреплений по столам, история и ручной сброс."
+        description="Статус столов и актуальные waiter/hookah закрепления. История открывается по клику на карточку стола."
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Свободные столы" value={freeTables} />
@@ -244,7 +272,12 @@ export const TablesAssignmentsPage = () => {
       <Card className="grid gap-4 p-4 md:grid-cols-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-          <Input className="pl-9" placeholder="Поиск столов" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input
+            className="pl-9"
+            placeholder="Поиск столов"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </div>
         <Select value={zoneFilter} onChange={(event) => setZoneFilter(event.target.value)}>
           <option value="all">Все зоны</option>
@@ -253,95 +286,94 @@ export const TablesAssignmentsPage = () => {
           <option value="VIP">VIP</option>
         </Select>
       </Card>
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredTables.map((table) => {
-            const waiterAssignment = assignments.find(
-              (assignment) =>
-                assignment.table_id === table.id &&
-                assignment.assignment_scope === 'waiter' &&
-                assignment.status === 'active',
-            )
-            const hookahAssignment = assignments.find(
-              (assignment) =>
-                assignment.table_id === table.id &&
-                assignment.assignment_scope === 'hookah' &&
-                assignment.status === 'active',
-            )
-            const tableStatus = getDerivedTableStatus(table.id, callEvents)
-            const openCalls = callEvents.filter(
-              (event) => event.table_id === table.id && isPendingWorkingCallStatus(event.status),
-            ).length
+      <div className="grid gap-4 md:grid-cols-2">
+        {filteredTables.map((table) => {
+          const waiterAssignment = assignments.find(
+            (assignment) =>
+              assignment.table_id === table.id &&
+              assignment.assignment_scope === 'waiter' &&
+              assignment.status === 'active',
+          )
+          const hookahAssignment = assignments.find(
+            (assignment) =>
+              assignment.table_id === table.id &&
+              assignment.assignment_scope === 'hookah' &&
+              assignment.status === 'active',
+          )
+          const tableStatus = getDerivedTableStatus(table.id, callEvents)
+          const openCalls = callEvents.filter(
+            (event) => event.table_id === table.id && isPendingWorkingCallStatus(event.status),
+          ).length
 
-            return (
-              <Card
-                key={table.id}
-                className={`cursor-pointer p-5 transition hover:-translate-y-0.5 ${selectedTableId === table.id ? 'ring-2 ring-emerald-200' : ''}`}
-                onClick={() => setSelectedTableId(table.id)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-950">{table.name}</h3>
-                    <p className="text-sm text-slate-500">{table.zone}</p>
-                  </div>
-                  <Badge tone={getDerivedTableStatusTone(tableStatus)}>
-                    {getDerivedTableStatusLabel(tableStatus)}
-                  </Badge>
+          return (
+            <Card
+              key={table.id}
+              className="cursor-pointer p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.08)]"
+              onClick={() => setSelectedTableId(table.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-950">{table.name}</h3>
+                  <p className="text-sm text-slate-500">{table.zone}</p>
                 </div>
-                <div className="mt-4 text-sm text-slate-500">
-                  {openCalls > 0
-                    ? `Неподтвержденных вызовов: ${openCalls}`
-                    : tableStatus === 'confirmed'
-                      ? 'Последний вызов подтвержден'
-                      : 'Активных вызовов нет'}
-                </div>
-                <div className="mt-5 space-y-3">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Официант</div>
-                    <div className="mt-1 font-medium text-slate-900">{getAssignmentSummary(waiterAssignment, employees)}</div>
-                    {waiterAssignment ? (
-                      <Button className="mt-3" variant="ghost" onClick={(event) => {
-                        event.stopPropagation()
-                        setResetAssignmentId(waiterAssignment.id)
-                      }}>
-                        <RefreshCcw className="mr-2 h-4 w-4" />
-                        Сбросить официанта
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Кальян</div>
-                    <div className="mt-1 font-medium text-slate-900">{getAssignmentSummary(hookahAssignment, employees)}</div>
-                    {hookahAssignment ? (
-                      <Button className="mt-3" variant="ghost" onClick={(event) => {
-                        event.stopPropagation()
-                        setResetAssignmentId(hookahAssignment.id)
-                      }}>
-                        <RefreshCcw className="mr-2 h-4 w-4" />
-                        Сбросить кальянщика
-                      </Button>
-                    ) : null}
+                <Badge tone={getDerivedTableStatusTone(tableStatus)}>
+                  {getDerivedTableStatusLabel(tableStatus)}
+                </Badge>
+              </div>
+              <div className="mt-4 text-sm text-slate-500">
+                {openCalls > 0
+                  ? `Неподтвержденных вызовов: ${openCalls}`
+                  : tableStatus === 'confirmed'
+                    ? 'Последний вызов подтвержден'
+                    : 'Активных вызовов нет'}
+              </div>
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Официант</div>
+                  <div className="mt-1 font-medium text-slate-900">
+                    {getAssignmentSummary(waiterAssignment, employees)}
                   </div>
                 </div>
-              </Card>
-            )
-          })}
-        </div>
-        <div className="space-y-4">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Кальян</div>
+                  <div className="mt-1 font-medium text-slate-900">
+                    {getAssignmentSummary(hookahAssignment, employees)}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+      <Modal
+        open={Boolean(selectedTableId)}
+        title={selectedTableId ? `История по столу: ${getTableName(selectedTableId, tables)}` : 'История по столу'}
+        onClose={() => setSelectedTableId(null)}
+        footer={
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setSelectedTableId(null)}>
+              Закрыть
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-6 xl:grid-cols-2">
           <Card className="p-5">
-            <h3 className="text-lg font-semibold text-slate-950">История по столу</h3>
-            <p className="mt-1 text-sm text-slate-500">{getTableName(selectedTableId, tables)}</p>
+            <h3 className="text-lg font-semibold text-slate-950">История закреплений</h3>
             <div className="mt-4 space-y-3">
               {selectedTableHistory.length === 0 ? (
-                <p className="text-sm text-slate-500">Закреплений еще не было.</p>
+                <p className="text-sm text-slate-500">По столу еще не было закреплений.</p>
               ) : (
                 selectedTableHistory.map((assignment) => (
                   <div key={assignment.id} className="rounded-2xl bg-slate-50 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-medium text-slate-900">
-                        {getScopeLabel(assignment.assignment_scope)} · {getEmployeeName(assignment.assigned_employee_id, employees)}
+                        {getScopeLabel(assignment.assignment_scope)} ·{' '}
+                        {getEmployeeName(assignment.assigned_employee_id, employees)}
                       </div>
-                      <Badge tone={assignment.status === 'active' ? 'success' : 'neutral'}>{getAssignmentStatusLabel(assignment.status)}</Badge>
+                      <Badge tone={assignment.status === 'active' ? 'success' : 'neutral'}>
+                        {getAssignmentStatusLabel(assignment.status)}
+                      </Badge>
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       Назначен: {formatDateTime(assignment.assigned_at)}
@@ -349,7 +381,7 @@ export const TablesAssignmentsPage = () => {
                     </div>
                     {assignment.release_reason ? (
                       <div className="mt-1 text-xs uppercase tracking-[0.08em] text-slate-400">
-                        причина: {getReleaseReasonLabel(assignment.release_reason)}
+                        Причина: {getReleaseReasonLabel(assignment.release_reason)}
                       </div>
                     ) : null}
                   </div>
@@ -358,12 +390,12 @@ export const TablesAssignmentsPage = () => {
             </div>
           </Card>
           <Card className="p-5">
-            <h3 className="text-lg font-semibold text-slate-950">Последние вызовы по столу</h3>
+            <h3 className="text-lg font-semibold text-slate-950">Последние вызовы</h3>
             <div className="mt-4 space-y-3">
               {selectedTableCalls.length === 0 ? (
-                <p className="text-sm text-slate-500">По столу пока нет вызовов.</p>
+                <p className="text-sm text-slate-500">По столу пока нет рабочих вызовов.</p>
               ) : (
-                selectedTableCalls.slice(0, 5).map((event) => (
+                selectedTableCalls.slice(0, 6).map((event) => (
                   <div key={event.event_id} className="rounded-2xl bg-slate-50 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-medium text-slate-900">{getServiceName(event.service_id, services)}</div>
@@ -378,20 +410,7 @@ export const TablesAssignmentsPage = () => {
             </div>
           </Card>
         </div>
-      </div>
-      <ConfirmDialog
-        open={Boolean(resetAssignmentId)}
-        title="Снять закрепление?"
-        description="Используй ручной сброс только если IIKO не прислал check_closed."
-        confirmText="Сбросить"
-        onClose={() => setResetAssignmentId(null)}
-        onConfirm={() => {
-          if (resetAssignmentId) {
-            manualResetAssignment(resetAssignmentId)
-          }
-          setResetAssignmentId(null)
-        }}
-      />
+      </Modal>
     </div>
   )
 }

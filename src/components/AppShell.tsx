@@ -1,14 +1,11 @@
 import {
-  Activity,
   BellRing,
   BookUser,
   Cable,
   ChartNoAxesCombined,
   Cog,
   LayoutList,
-  ListFilter,
   Radio,
-  ScanSearch,
   Settings2,
   TableProperties,
   Users,
@@ -24,22 +21,18 @@ const navItems = [
   { to: '/calls', label: 'Реестр вызовов', icon: LayoutList },
   { to: '/tables-assignments', label: 'Столы и закрепления', icon: TableProperties },
   { to: '/bindings', label: 'Привязки', icon: Radio },
-  { to: '/new-buttons', label: 'Новые кнопки', icon: ScanSearch },
   { to: '/employees', label: 'Сотрудники', icon: Users },
   { to: '/services', label: 'Услуги', icon: BellRing },
   { to: '/tables', label: 'Столы', icon: BookUser },
-  { to: '/logs/unknown', label: 'Журнал неизвестных кнопок', icon: ListFilter },
-  { to: '/logs/invalid', label: 'Журнал невалидных сигналов', icon: Activity },
   { to: '/logs/errors', label: 'Журнал ошибок', icon: Wrench },
   { to: '/integrations', label: 'Интеграции IIKO', icon: Cable },
   { to: '/analytics', label: 'Аналитика', icon: ChartNoAxesCombined },
-  { to: '/system-mode', label: 'Режимы системы', icon: Settings2 },
-  { to: '/settings', label: 'Настройки', icon: Cog },
+  { to: '/system-mode', label: 'Режим системы', icon: Settings2 },
+  { to: '/settings', label: 'О системе', icon: Cog },
 ]
 
 export const AppShell = () => {
   const authUser = useAppStore((state) => state.authUser)
-  const systemMode = useAppStore((state) => state.systemMode)
   const notifications = useAppStore((state) => state.notifications)
   const dismissNotification = useAppStore((state) => state.dismissNotification)
   const logout = useAppStore((state) => state.logout)
@@ -53,9 +46,7 @@ export const AppShell = () => {
               <div className="text-xs uppercase tracking-[0.24em] text-emerald-100">QWIK.PRO</div>
               <div className="text-lg font-semibold">QWIK Admin</div>
             </div>
-            <Badge tone={systemMode === 'work' ? 'success' : 'warning'}>
-              {systemMode === 'work' ? 'Режим: Работа' : 'Режим: Конфигурация'}
-            </Badge>
+            <Badge tone="success">Режим: Работа</Badge>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <div className="hidden text-right md:block">

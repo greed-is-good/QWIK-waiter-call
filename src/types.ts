@@ -1,5 +1,6 @@
 export type Role = 'waiter' | 'hookah' | 'admin'
-export type SystemMode = 'configuration' | 'work'
+export type ServiceRole = 'waiter' | 'hookah'
+export type SystemMode = 'work'
 export type CallStatus =
   | 'received'
   | 'routed'
@@ -18,6 +19,7 @@ export type NotificationTone = 'info' | 'success' | 'warning' | 'error'
 export interface Service {
   id: string
   name: string
+  assigned_role: ServiceRole
   is_active: boolean
 }
 
@@ -119,31 +121,16 @@ export interface IikoEventLog {
 }
 
 export interface IikoState {
+  token: string
   status: 'connected' | 'degraded' | 'disconnected'
   last_sync_at: string
   event_logs: IikoEventLog[]
-}
-
-export interface ClientDevice {
-  id: string
-  name: string
-  location: string
-  status: 'online' | 'offline' | 'warning'
-}
-
-export interface HealthCheck {
-  id: string
-  name: string
-  status: 'healthy' | 'warning' | 'critical'
-  details: string
 }
 
 export interface SettingsState {
   restaurant_name: string
   timezone: string
   support_phone: string
-  client_devices: ClientDevice[]
-  health_checks: HealthCheck[]
 }
 
 export interface AuthUser {
@@ -184,6 +171,7 @@ export interface EmployeeDraft {
 export interface ServiceDraft {
   id?: string
   name: string
+  assigned_role: ServiceRole
   is_active: boolean
 }
 

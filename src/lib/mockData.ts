@@ -30,8 +30,8 @@ const createTables = (): TableItem[] =>
   })
 
 export const seedServices: Service[] = [
-  { id: 'svc-waiter', name: 'Официант', is_active: true },
-  { id: 'svc-hookah', name: 'Кальян', is_active: true },
+  { id: 'svc-waiter', name: 'Официант', assigned_role: 'waiter', is_active: true },
+  { id: 'svc-hookah', name: 'Кальян', assigned_role: 'hookah', is_active: true },
 ]
 
 export const seedTables = createTables()
@@ -403,6 +403,7 @@ export const seedErrorLogs: ErrorLog[] = [
 ]
 
 export const seedIikoState: IikoState = {
+  token: 'demo-iiko-token-001',
   status: 'connected',
   last_sync_at: minutesAgo(1),
   event_logs: [
@@ -423,17 +424,6 @@ export const seedSettings: SettingsState = {
   restaurant_name: 'QWIK.PRO Demo Cafe',
   timezone: 'Asia/Omsk',
   support_phone: '+7 (999) 100-20-30',
-  client_devices: [
-    { id: 'device-hall-1', name: 'Планшет зал 1', location: 'Зал', status: 'online' },
-    { id: 'device-veranda-3', name: 'Планшет веранда 3', location: 'Веранда', status: 'online' },
-    { id: 'device-vip-1', name: 'Планшет VIP', location: 'VIP', status: 'warning' },
-  ],
-  health_checks: [
-    { id: 'health-max', name: 'MAX bot gateway', status: 'healthy', details: 'Сообщения публикуются < 1 сек.' },
-    { id: 'health-iiko', name: 'IIKO bridge', status: 'warning', details: 'Есть редкие задержки при check_closed' },
-    { id: 'health-ui', name: 'Admin client', status: 'healthy', details: 'localStorage persist активен' },
-    { id: 'health-datalens', name: 'DataLens embed', status: 'healthy', details: 'Работает в mock-режиме' },
-  ],
 }
 
 export const createInitialState = () => ({

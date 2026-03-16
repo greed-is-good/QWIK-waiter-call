@@ -25,7 +25,25 @@ const createId = (prefix: string) =>
 
 const normalizeRadioButtonId = (value: string) => value.trim().toUpperCase()
 
-const getAssignmentScope = (serviceId: string | null) => (serviceId === 'svc-hookah' ? 'hookah' : 'waiter')
+const inferServiceRole = (serviceId: string, serviceName?: string) => {
+  if (serviceId === 'svc-hookah' || serviceName?.toLowerCase().includes('кальян')) {
+    return 'hookah'
+  }
+
+  return 'waiter'
+}
+
+const getAssignmentScope = (
+  serviceId: string | null,
+  services: Array<{ id: string; name: string; assigned_role?: 'waiter' | 'hookah' }>,
+) => {
+  if (!serviceId) {
+    return 'waiter'
+  }
+
+  const service = services.find((item) => item.id === serviceId)
+  return service?.assigned_role ?? inferServiceRole(serviceId, service?.name)
+}
 
 interface AppState extends ReturnType<typeof createInitialState> {
   authUser: AuthUser | null
@@ -45,6 +63,8 @@ interface AppState extends ReturnType<typeof createInitialState> {
   simulateCheckClose: (tableId: string) => void
   simulateSignal: (payload: SimulateSignalInput) => void
   respondToChatMessage: (messageId: string, employeeId: string) => void
+  saveIikoToken: (token: string) => boolean
+  saveTimezone: (timezone: string) => boolean
 }
 
 type PersistedState = Pick<
@@ -78,14 +98,21 @@ const mergePersistedState = (persistedState: unknown, currentState: AppState): A
     ? (persisted.iiko as Partial<AppState['iiko']>)
     : undefined
 
+  const persistedServices = Array.isArray(persisted.services)
+    ? persisted.services.map((service) => ({
+        ...service,
+        assigned_role:
+          service && typeof service === 'object' && 'assigned_role' in service
+            ? (service.assigned_role as 'waiter' | 'hookah')
+            : inferServiceRole(String((service as { id?: string }).id ?? ''), String((service as { name?: string }).name ?? '')),
+      }))
+    : currentState.services
+
   return {
     ...currentState,
     authUser: isRecord(persisted.authUser) ? (persisted.authUser as AppState['authUser']) : currentState.authUser,
-    systemMode:
-      persisted.systemMode === 'configuration' || persisted.systemMode === 'work'
-        ? persisted.systemMode
-        : currentState.systemMode,
-    services: Array.isArray(persisted.services) ? persisted.services : currentState.services,
+    systemMode: 'work',
+    services: persistedServices,
     tables: Array.isArray(persisted.tables) ? persisted.tables : currentState.tables,
     employees: Array.isArray(persisted.employees) ? persisted.employees : currentState.employees,
     bindings: Array.isArray(persisted.bindings) ? persisted.bindings : currentState.bindings,
@@ -98,6 +125,7 @@ const mergePersistedState = (persistedState: unknown, currentState: AppState): A
     iiko: {
       ...currentState.iiko,
       ...(persistedIiko ?? {}),
+      token: typeof persistedIiko?.token === 'string' ? persistedIiko.token : currentState.iiko.token,
       event_logs: Array.isArray(persistedIiko?.event_logs)
         ? persistedIiko.event_logs
         : currentState.iiko.event_logs,
@@ -105,12 +133,6 @@ const mergePersistedState = (persistedState: unknown, currentState: AppState): A
     settings: {
       ...currentState.settings,
       ...(persistedSettings ?? {}),
-      client_devices: Array.isArray(persistedSettings?.client_devices)
-        ? persistedSettings.client_devices
-        : currentState.settings.client_devices,
-      health_checks: Array.isArray(persistedSettings?.health_checks)
-        ? persistedSettings.health_checks
-        : currentState.settings.health_checks,
     },
     selectedChatEmployeeId:
       typeof persisted.selectedChatEmployeeId === 'string'
@@ -209,15 +231,15 @@ export const useAppStore = create<AppState>()(
             notifications: state.notifications.filter((notification) => notification.id !== id),
           })),
         setSelectedChatEmployeeId: (employeeId) => set({ selectedChatEmployeeId: employeeId }),
-        switchMode: (mode) => {
+        switchMode: () => {
           set((state) => ({
-            systemMode: mode,
+            systemMode: 'work',
             techLogs: [
-              appendTechLog('system', 'info', `Режим системы переключен на ${mode === 'work' ? 'Работа' : 'Конфигурация'}`),
+              appendTechLog('system', 'info', 'Система работает в едином рабочем режиме'),
               ...state.techLogs,
             ],
           }))
-          pushNotification('success', 'Режим обновлен', mode === 'work' ? 'Whitelist-обработка активна' : 'Система принимает новые кнопки')
+          pushNotification('success', 'Режим обновлен', 'Активен единый рабочий режим')
         },
         saveEmployee: (draft) => {
           const fullName = draft.full_name.trim()
@@ -279,7 +301,7 @@ export const useAppStore = create<AppState>()(
 
           if (draft.id && !draft.is_active) {
             const state = get()
-            const serviceScope = getAssignmentScope(draft.id)
+            const serviceScope = draft.assigned_role
             const hasActiveBinding = state.bindings.some(
               (binding) => binding.service_id === draft.id && binding.is_active,
             )
@@ -308,6 +330,7 @@ export const useAppStore = create<AppState>()(
             const service = {
               id: serviceId,
               name,
+              assigned_role: draft.assigned_role,
               is_active: draft.is_active,
             }
 
@@ -667,44 +690,6 @@ export const useAppStore = create<AppState>()(
           const binding = state.bindings.find((item) => item.radio_button_id === radioButtonId && item.is_active)
 
           if (!binding) {
-            if (state.systemMode === 'configuration') {
-              set((current) => {
-                const existing = current.newButtons.find((button) => button.radio_button_id === radioButtonId)
-
-                return {
-                  newButtons: existing
-                    ? current.newButtons.map((button) =>
-                        button.radio_button_id === radioButtonId
-                          ? {
-                              ...button,
-                              samples_count: button.samples_count + 1,
-                              last_seen_at: now,
-                              last_client_device_id: payload.client_device_id,
-                              raw_signal: JSON.stringify(payload),
-                            }
-                          : button,
-                      )
-                    : [
-                        {
-                          radio_button_id: radioButtonId,
-                          first_seen_at: now,
-                          last_seen_at: now,
-                          samples_count: 1,
-                          last_client_device_id: payload.client_device_id,
-                          raw_signal: JSON.stringify(payload),
-                        },
-                        ...current.newButtons,
-                      ],
-                  techLogs: [
-                    appendTechLog('bot', 'info', `Поймана новая кнопка ${radioButtonId} в режиме конфигурации`),
-                    ...current.techLogs,
-                  ],
-                }
-              })
-              pushNotification('success', 'Новая кнопка зафиксирована', 'Открой раздел "Новые кнопки" для создания привязки')
-              return
-            }
-
             const unknownEvent = createEvent({
               radio_button_id: radioButtonId,
               client_device_id: payload.client_device_id,
@@ -779,7 +764,7 @@ export const useAppStore = create<AppState>()(
             return
           }
 
-          const scope = getAssignmentScope(message.service_id)
+          const scope = getAssignmentScope(message.service_id, state.services)
           const activeAssignment = state.assignments.find(
             (item) =>
               item.table_id === message.table_id &&
@@ -875,11 +860,53 @@ export const useAppStore = create<AppState>()(
             needsAssignment ? `Стол закреплен за ${employee.full_name}` : `${employee.full_name} подтвердил вызов`,
           )
         },
+        saveIikoToken: (token) => {
+          const normalizedToken = token.trim()
+
+          if (!normalizedToken) {
+            pushNotification('warning', 'Укажи token IIKO')
+            return false
+          }
+
+          set((state) => ({
+            iiko: {
+              ...state.iiko,
+              token: normalizedToken,
+            },
+            techLogs: [
+              appendTechLog('iiko', 'success', 'IIKO token обновлен в админке'),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Token IIKO сохранен')
+          return true
+        },
+        saveTimezone: (timezone) => {
+          const normalizedTimezone = timezone.trim()
+
+          if (!normalizedTimezone) {
+            pushNotification('warning', 'Укажи часовой пояс')
+            return false
+          }
+
+          set((state) => ({
+            settings: {
+              ...state.settings,
+              timezone: normalizedTimezone,
+            },
+            techLogs: [
+              appendTechLog('system', 'success', `Часовой пояс обновлен: ${normalizedTimezone}`),
+              ...state.techLogs,
+            ],
+          }))
+          pushNotification('success', 'Часовой пояс сохранен')
+          return true
+        },
       }
     },
     {
       name: storageKey,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       merge: mergePersistedState,
       partialize: (state): PersistedState => ({

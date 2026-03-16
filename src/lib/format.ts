@@ -5,10 +5,8 @@ import type {
   AssignmentStatus,
   CallEvent,
   CallStatus,
-  ClientDevice,
   Employee,
   ErrorLog,
-  HealthCheck,
   IikoEventLog,
   IikoState,
   ReleaseReason,
@@ -218,32 +216,13 @@ export const getIikoEventTypeLabel = (type: IikoEventLog['type']) => {
   }
 }
 
-export const getDeviceStatusLabel = (status: ClientDevice['status']) => {
-  switch (status) {
-    case 'online':
-      return 'Онлайн'
-    case 'offline':
-      return 'Офлайн'
-    case 'warning':
-      return 'Предупреждение'
-  }
-}
-
-export const getHealthStatusLabel = (status: HealthCheck['status']) => {
-  switch (status) {
-    case 'healthy':
-      return 'Норма'
-    case 'warning':
-      return 'Предупреждение'
-    case 'critical':
-      return 'Критично'
-  }
-}
-
 export const getChatMessageStateLabel = (state: 'open' | 'closed') =>
   state === 'open' ? 'Ожидает отклика' : 'Закрыто'
 
 export const getScopeLabel = (scope: AssignmentScope) => (scope === 'waiter' ? 'Официант' : 'Кальян')
+
+export const getServiceRoleLabel = (role: Service['assigned_role']) =>
+  role === 'waiter' ? 'Официант' : 'Кальянщик'
 
 export const getRoleLabel = (role: Employee['role']) => {
   switch (role) {

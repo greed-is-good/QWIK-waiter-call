@@ -2,14 +2,14 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router
 
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { AppShell } from './components/AppShell'
-import { BindingsPage, NewButtonsPage } from './pages/BindingsPages'
+import { BindingsPage } from './pages/BindingsPages'
 import { CallsRegistryPage, TablesAssignmentsPage } from './pages/CallsPages'
-import { ErrorsLogPage, InvalidSignalsPage, UnknownLogPage } from './pages/LogPages'
+import { ErrorJournalPage } from './pages/LogPages'
 import { LoginPage } from './pages/LoginPage'
 import {
+  AboutSystemPage,
   AnalyticsPage,
   IntegrationsPage,
-  SettingsPage,
   SystemModePage,
 } from './pages/OperationsPages'
 import { EmployeesPage, ServicesPage, TablesPage } from './pages/ResourcePages'
@@ -48,17 +48,17 @@ export default function App() {
             <Route path="/calls" element={<CallsRegistryPage />} />
             <Route path="/tables-assignments" element={<TablesAssignmentsPage />} />
             <Route path="/system-mode" element={<SystemModePage />} />
-            <Route path="/new-buttons" element={<NewButtonsPage />} />
             <Route path="/bindings" element={<BindingsPage />} />
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/tables" element={<TablesPage />} />
-            <Route path="/logs/unknown" element={<UnknownLogPage />} />
-            <Route path="/logs/invalid" element={<InvalidSignalsPage />} />
-            <Route path="/logs/errors" element={<ErrorsLogPage />} />
+            <Route path="/new-buttons" element={<Navigate to="/bindings" replace />} />
+            <Route path="/logs/unknown" element={<Navigate to="/logs/errors" replace />} />
+            <Route path="/logs/invalid" element={<Navigate to="/logs/errors" replace />} />
+            <Route path="/logs/errors" element={<ErrorJournalPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<AboutSystemPage />} />
             <Route path="/simulator" element={<Navigate to="/calls" replace />} />
           </Route>
         </Routes>
