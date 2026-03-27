@@ -71,6 +71,7 @@ type PersistedState = Pick<
   AppState,
   | 'authUser'
   | 'systemMode'
+  | 'trial'
   | 'services'
   | 'tables'
   | 'employees'
@@ -97,6 +98,9 @@ const mergePersistedState = (persistedState: unknown, currentState: AppState): A
   const persistedIiko = isRecord(persisted.iiko)
     ? (persisted.iiko as Partial<AppState['iiko']>)
     : undefined
+  const persistedTrial = isRecord(persisted.trial)
+    ? (persisted.trial as Partial<AppState['trial']>)
+    : undefined
 
   const persistedServices = Array.isArray(persisted.services)
     ? persisted.services.map((service) => ({
@@ -112,6 +116,18 @@ const mergePersistedState = (persistedState: unknown, currentState: AppState): A
     ...currentState,
     authUser: isRecord(persisted.authUser) ? (persisted.authUser as AppState['authUser']) : currentState.authUser,
     systemMode: 'work',
+    trial: {
+      ...currentState.trial,
+      ...(persistedTrial ?? {}),
+      activated_at:
+        typeof persistedTrial?.activated_at === 'string'
+          ? persistedTrial.activated_at
+          : currentState.trial.activated_at,
+      duration_days:
+        typeof persistedTrial?.duration_days === 'number'
+          ? persistedTrial.duration_days
+          : currentState.trial.duration_days,
+    },
     services: persistedServices,
     tables: Array.isArray(persisted.tables) ? persisted.tables : currentState.tables,
     employees: Array.isArray(persisted.employees) ? persisted.employees : currentState.employees,
@@ -906,12 +922,13 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: storageKey,
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       merge: mergePersistedState,
       partialize: (state): PersistedState => ({
         authUser: state.authUser,
         systemMode: state.systemMode,
+        trial: state.trial,
         services: state.services,
         tables: state.tables,
         employees: state.employees,

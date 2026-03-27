@@ -10,11 +10,18 @@ import {
   TableProperties,
   Users,
   Wrench,
+  X,
 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { Badge, Button } from './ui'
-import { cn } from '../lib/format'
+import {
+  cn,
+  formatDayCount,
+  getTrialDaysRemaining,
+  getTrialStatus,
+  getTrialStatusTone,
+} from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
 
 const navItems = [
@@ -36,6 +43,14 @@ export const AppShell = () => {
   const notifications = useAppStore((state) => state.notifications)
   const dismissNotification = useAppStore((state) => state.dismissNotification)
   const logout = useAppStore((state) => state.logout)
+  const trial = useAppStore((state) => state.trial)
+
+  const trialDaysRemaining = getTrialDaysRemaining(trial)
+  const trialStatus = getTrialStatus(trial)
+  const trialBadgeText =
+    trialStatus === 'expired'
+      ? 'Пробный режим истек'
+      : `Пробный режим · ${formatDayCount(trialDaysRemaining)}`
 
   return (
     <div className="min-h-screen">
@@ -46,7 +61,7 @@ export const AppShell = () => {
               <div className="text-xs uppercase tracking-[0.24em] text-emerald-100">QWIK.PRO</div>
               <div className="text-lg font-semibold">QWIK Admin</div>
             </div>
-            <Badge tone="success">Режим: Работа</Badge>
+            <Badge tone={getTrialStatusTone(trialStatus)}>{trialBadgeText}</Badge>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <div className="hidden text-right md:block">
@@ -105,10 +120,12 @@ export const AppShell = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold text-slate-900">{notification.message}</div>
-                {notification.description ? <div className="mt-1 text-sm text-slate-600">{notification.description}</div> : null}
+                {notification.description ? (
+                  <div className="mt-1 text-sm text-slate-600">{notification.description}</div>
+                ) : null}
               </div>
               <button className="text-slate-400 hover:text-slate-700" onClick={() => dismissNotification(notification.id)}>
-                ×
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>

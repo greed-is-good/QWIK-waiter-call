@@ -9,12 +9,14 @@ import type {
   Service,
   SettingsState,
   SystemMode,
+  TrialState,
   TableAssignment,
   TableItem,
   TechLog,
 } from '../types'
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000).toISOString()
 
 const createTables = (): TableItem[] =>
   Array.from({ length: 20 }, (_, index) => {
@@ -426,8 +428,14 @@ export const seedSettings: SettingsState = {
   support_phone: '+7 (999) 100-20-30',
 }
 
+export const seedTrial: TrialState = {
+  activated_at: daysAgo(5),
+  duration_days: 14,
+}
+
 export const createInitialState = () => ({
   systemMode: 'work' as SystemMode,
+  trial: seedTrial,
   services: seedServices,
   tables: seedTables,
   employees: seedEmployees,

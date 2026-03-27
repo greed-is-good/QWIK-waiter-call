@@ -13,7 +13,11 @@ import type {
   Service,
   TableAssignment,
   TableItem,
+  TrialState,
+  TrialStatus,
 } from '../types'
+
+const dayInMs = 24 * 60 * 60 * 1000
 
 export const cn = (...values: Array<string | boolean | null | undefined>) => clsx(values)
 
@@ -39,6 +43,16 @@ export const formatTime = (value?: string | null) => {
   }).format(new Date(value))
 }
 
+export const formatDate = (value?: string | null) => {
+  if (!value) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+  }).format(new Date(value))
+}
+
 export const formatDuration = (from?: string | null, to?: string | null) => {
   if (!from || !to) {
     return '—'
@@ -50,6 +64,21 @@ export const formatDuration = (from?: string | null, to?: string | null) => {
   const seconds = totalSeconds % 60
 
   return minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`
+}
+
+export const formatDayCount = (count: number) => {
+  const mod10 = count % 10
+  const mod100 = count % 100
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} день`
+  }
+
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} дня`
+  }
+
+  return `${count} дней`
 }
 
 export const getTableName = (tableId: string | null | undefined, tables: TableItem[]) =>
@@ -219,7 +248,8 @@ export const getIikoEventTypeLabel = (type: IikoEventLog['type']) => {
 export const getChatMessageStateLabel = (state: 'open' | 'closed') =>
   state === 'open' ? 'Ожидает отклика' : 'Закрыто'
 
-export const getScopeLabel = (scope: AssignmentScope) => (scope === 'waiter' ? 'Официант' : 'Кальян')
+export const getScopeLabel = (scope: AssignmentScope) =>
+  scope === 'waiter' ? 'Официант' : 'Кальян'
 
 export const getServiceRoleLabel = (role: Service['assigned_role']) =>
   role === 'waiter' ? 'Официант' : 'Кальянщик'
@@ -244,6 +274,61 @@ export const getAssignmentSummary = (
   }
 
   return `${getEmployeeName(assignment.assigned_employee_id, employees)}`
+}
+
+export const getTrialEndDate = (trial: TrialState) =>
+  new Date(new Date(trial.activated_at).getTime() + trial.duration_days * dayInMs).toISOString()
+
+export const getTrialDaysRemaining = (trial: TrialState) => {
+  const diff = new Date(getTrialEndDate(trial)).getTime() - Date.now()
+
+  if (diff <= 0) {
+    return 0
+  }
+
+  return Math.ceil(diff / dayInMs)
+}
+
+export const getTrialDaysElapsed = (trial: TrialState) =>
+  Math.min(trial.duration_days, Math.max(trial.duration_days - getTrialDaysRemaining(trial), 0))
+
+export const getTrialProgressPercent = (trial: TrialState) =>
+  Math.min(100, Math.max((getTrialDaysElapsed(trial) / trial.duration_days) * 100, 0))
+
+export const getTrialStatus = (trial: TrialState): TrialStatus => {
+  const remainingDays = getTrialDaysRemaining(trial)
+
+  if (remainingDays === 0) {
+    return 'expired'
+  }
+
+  if (remainingDays <= 3) {
+    return 'ending_soon'
+  }
+
+  return 'active'
+}
+
+export const getTrialStatusLabel = (status: TrialStatus) => {
+  switch (status) {
+    case 'active':
+      return 'Активен'
+    case 'ending_soon':
+      return 'Скоро завершится'
+    case 'expired':
+      return 'Истек'
+  }
+}
+
+export const getTrialStatusTone = (status: TrialStatus) => {
+  switch (status) {
+    case 'active':
+      return 'success'
+    case 'ending_soon':
+      return 'warning'
+    case 'expired':
+      return 'error'
+  }
 }
 
 export const buildTimeline = (event: CallEvent) => {

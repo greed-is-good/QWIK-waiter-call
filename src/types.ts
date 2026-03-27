@@ -1,6 +1,7 @@
 export type Role = 'waiter' | 'hookah' | 'admin'
 export type ServiceRole = 'waiter' | 'hookah'
 export type SystemMode = 'work'
+export type TrialStatus = 'active' | 'ending_soon' | 'expired'
 export type CallStatus =
   | 'received'
   | 'routed'
@@ -125,6 +126,11 @@ export interface IikoState {
   status: 'connected' | 'degraded' | 'disconnected'
   last_sync_at: string
   event_logs: IikoEventLog[]
+}
+
+export interface TrialState {
+  activated_at: string
+  duration_days: number
 }
 
 export interface SettingsState {

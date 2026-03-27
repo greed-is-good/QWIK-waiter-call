@@ -9,26 +9,124 @@ import {
   Input,
   PageHeader,
 } from '../components/ui'
+import {
+  cn,
+  formatDate,
+  formatDayCount,
+  getTrialDaysElapsed,
+  getTrialDaysRemaining,
+  getTrialEndDate,
+  getTrialProgressPercent,
+  getTrialStatus,
+  getTrialStatusLabel,
+  getTrialStatusTone,
+} from '../lib/format'
+import type { TrialStatus } from '../types'
 import { useAppStore } from '../store/useAppStore'
 
+const getTrialDescription = (status: TrialStatus, remainingDays: number) => {
+  switch (status) {
+    case 'ending_soon':
+      return `Пробный период подходит к завершению. До окончания доступа осталось ${formatDayCount(remainingDays)}.`
+    case 'expired':
+      return 'Пробный период завершен. Для продолжения работы требуется активация постоянного доступа.'
+    default:
+      return `Пробный период активен. В интерфейсе доступны ключевые сценарии QWIK Admin, осталось ${formatDayCount(remainingDays)}.`
+  }
+}
+
+const trialFeatures = [
+  'Реестр вызовов и история обработки',
+  'Привязки кнопок, сотрудники и услуги',
+  'Интеграция IIKO и токен подключения',
+  'Встроенная аналитика DataLens',
+]
+
 export const SystemModePage = () => {
-  const systemMode = useAppStore((state) => state.systemMode)
+  const trial = useAppStore((state) => state.trial)
+
+  const trialStatus = getTrialStatus(trial)
+  const trialDaysRemaining = getTrialDaysRemaining(trial)
+  const trialDaysElapsed = getTrialDaysElapsed(trial)
+  const trialProgressPercent = getTrialProgressPercent(trial)
+  const trialEndDate = getTrialEndDate(trial)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Режим системы"
-        description="Система работает в едином режиме обработки вызовов."
+        description="Система запущена в формате пробного периода на 14 дней."
       />
-      <Card className="p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold text-slate-950">Работа</h3>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Система обрабатывает только активные привязки кнопок. Неизвестные и невалидные сигналы уходят в единый журнал ошибок.
+
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-2xl font-semibold text-slate-950">Пробный режим</h3>
+              <Badge tone={getTrialStatusTone(trialStatus)}>{getTrialStatusLabel(trialStatus)}</Badge>
+            </div>
+            <p className="max-w-2xl text-sm leading-6 text-slate-500">
+              {getTrialDescription(trialStatus, trialDaysRemaining)}
             </p>
           </div>
-          <Badge tone="success">{systemMode === 'work' ? 'Активен' : 'Недоступен'}</Badge>
+
+          <div className="rounded-3xl bg-emerald-50 px-6 py-5 text-left lg:min-w-[220px] lg:text-right">
+            <div className="text-sm font-medium text-emerald-800">Осталось времени</div>
+            <div className="mt-2 text-4xl font-semibold text-emerald-950">{trialDaysRemaining}</div>
+            <div className="mt-1 text-sm text-emerald-800">{formatDayCount(trialDaysRemaining)}</div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 px-6 py-5">
+          <div className="flex flex-col gap-2 text-xs uppercase tracking-[0.08em] text-slate-400 md:flex-row md:items-center md:justify-between">
+            <span>Использовано {trialDaysElapsed} из {trial.duration_days} дней</span>
+            <span>Доступ до {formatDate(trialEndDate)}</span>
+          </div>
+          <div className="mt-3 h-3 rounded-full bg-slate-100">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                trialStatus === 'expired' && 'bg-rose-500',
+                trialStatus === 'ending_soon' && 'bg-amber-500',
+                trialStatus === 'active' && 'bg-emerald-600',
+              )}
+              style={{ width: `${trialProgressPercent}%` }}
+            />
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Дата активации</div>
+          <div className="mt-3 text-lg font-semibold text-slate-950">{formatDate(trial.activated_at)}</div>
+          <p className="mt-2 text-sm text-slate-500">От этой даты рассчитывается срок пробного доступа.</p>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Действует до</div>
+          <div className="mt-3 text-lg font-semibold text-slate-950">{formatDate(trialEndDate)}</div>
+          <p className="mt-2 text-sm text-slate-500">После окончания периода потребуется перевод на постоянный доступ.</p>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Формат доступа</div>
+          <div className="mt-3 text-lg font-semibold text-slate-950">14-дневный пробный период</div>
+          <p className="mt-2 text-sm text-slate-500">Подходит для первичного запуска, демонстрации и согласования рабочих сценариев.</p>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-slate-950">Что входит в пробный период</h3>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {trialFeatures.map((feature) => (
+            <div
+              key={feature}
+              className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-700"
+            >
+              {feature}
+            </div>
+          ))}
         </div>
       </Card>
     </div>
